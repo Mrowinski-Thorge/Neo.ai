@@ -2,8 +2,11 @@
 <html lang="de" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NeoAI • Private Local Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NeoAI • Private Chat</title>
+    
+    <!-- Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -12,302 +15,313 @@
             darkMode: 'class',
             theme: {
                 extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
                     colors: {
-                        background: '#09090b', // Zinc 950 - Sehr dunkles Grau/Schwarz
-                        surface: '#18181b',    // Zinc 900
-                        surface_highlight: '#27272a', // Zinc 800
-                        primary: '#fafafa',    // Fast Weiß für Text
-                        secondary: '#a1a1aa',  // Zinc 400 für Subtext
-                        accent: '#3b82f6',     // Blau
+                        background: '#050505',
+                        surface: '#0f0f0f',
+                        glass: 'rgba(20, 20, 20, 0.7)',
+                        glass_border: 'rgba(255, 255, 255, 0.06)',
+                        accent: '#3b82f6', // Dezentes Blau
                     },
-                    animation: {
-                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                        'float': 'float 6s ease-in-out infinite',
-                    },
-                    keyframes: {
-                        float: {
-                            '0%, 100%': { transform: 'translateY(0)' },
-                            '50%': { transform: 'translateY(-10px)' },
-                        }
+                    backdropBlur: {
+                        'xs': '2px',
+                        '2xl': '24px',
+                        '3xl': '48px',
                     }
                 }
             }
         }
     </script>
 
-    <!-- Marked.js & DOMPurify -->
+    <!-- Libs -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
-        /* Base Setup */
+        /* Base */
         body {
             background-color: theme('colors.background');
-            color: theme('colors.primary');
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #d4d4d8;
             -webkit-font-smoothing: antialiased;
+            overflow: hidden; /* App-Feeling */
         }
 
-        /* Frosted Glass Utilities */
-        .glass {
-            background: rgba(24, 24, 27, 0.6);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+        /* Ambient Background Glow */
+        .ambient-glow {
+            position: fixed;
+            top: -20%;
+            left: -10%;
+            width: 50vw;
+            height: 50vw;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(80px);
+            z-index: -1;
+            pointer-events: none;
+        }
+        .ambient-glow-2 {
+            position: fixed;
+            bottom: -20%;
+            right: -10%;
+            width: 60vw;
+            height: 60vw;
+            background: radial-gradient(circle, rgba(147, 51, 234, 0.06) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(100px);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Glass Components */
+        .glass-panel {
+            background: theme('colors.glass');
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid theme('colors.glass_border');
+        }
+
+        .glass-button {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.2s ease;
+        }
+        .glass-button:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+        }
+        .glass-button:active {
+            transform: translateY(0);
+        }
+
+        /* Scrollbar minimalist */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* Dialog Animation */
+        dialog { 
+            animation: fadeOut 0.2s ease-out; 
+            opacity: 0; 
+            transform: scale(0.98); 
+        }
+        dialog[open] { 
+            animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        dialog::backdrop {
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            animation: fadeInBack 0.3s ease-out forwards;
         }
         
-        .glass-strong {
-            background: rgba(9, 9, 11, 0.8);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-        }
+        @keyframes fadeIn { to { opacity: 1; transform: scale(1); } }
+        @keyframes fadeOut { to { opacity: 0; transform: scale(0.98); } }
+        @keyframes fadeInBack { from { opacity: 0; } to { opacity: 1; } }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
-
-        /* Markdown Styles Cleaner */
-        .prose p { margin-bottom: 0.75em; line-height: 1.6; }
-        .prose p:last-child { margin-bottom: 0; }
+        /* Markdown Prose Overrides */
+        .prose { max-width: none; font-size: 0.95rem; line-height: 1.65; }
+        .prose p { margin-bottom: 0.8em; }
         .prose pre {
-            background-color: #0f0f12; /* Darker than surface */
-            border-radius: 0.75rem;
-            padding: 1rem;
-            border: 1px solid #27272a;
-            overflow-x: auto;
-            margin: 0.5rem 0;
+            background: #121212 !important;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            margin: 1em 0;
         }
         .prose code {
-            color: #e4e4e7;
-            background-color: rgba(255,255,255,0.1);
-            padding: 0.2em 0.4em;
+            color: #a1a1aa;
+            background: rgba(255,255,255,0.06);
+            padding: 2px 5px;
             border-radius: 4px;
-            font-size: 0.9em;
+            font-weight: 400;
         }
-        .prose pre code { background-color: transparent; padding: 0; color: inherit; }
-        
-        /* Typing Cursor */
-        .typing-cursor::after {
+        .prose pre code { background: transparent; padding: 0; color: inherit; }
+        /* Links in Prose */
+        .prose a { color: #60a5fa; text-decoration: none; border-bottom: 1px dashed rgba(96,165,250,0.4); }
+        .prose a:hover { border-bottom-style: solid; }
+
+        /* Cursor */
+        .cursor-blink::after {
             content: '';
             display: inline-block;
-            width: 6px;
-            height: 16px;
-            background-color: currentColor;
-            margin-left: 4px;
-            vertical-align: middle;
-            animation: blink 1s step-start infinite;
+            width: 2px;
+            height: 1em;
+            background: #60a5fa;
+            margin-left: 2px;
+            animation: blink 1s step-end infinite;
+            vertical-align: text-bottom;
         }
         @keyframes blink { 50% { opacity: 0; } }
 
-        /* Dialog Animation */
-        dialog { transition: opacity 0.3s ease, transform 0.3s ease; opacity: 0; transform: scale(0.95); }
-        dialog[open] { opacity: 1; transform: scale(1); }
-        dialog::backdrop { background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); }
     </style>
 </head>
-<body class="h-screen flex flex-col md:flex-row overflow-hidden selection:bg-blue-500/30">
+<body class="h-screen flex text-gray-200">
 
-    <!-- Confirmation Modal (Custom Overlay) -->
-    <dialog id="confirm-modal" class="glass-strong text-primary p-0 rounded-2xl shadow-2xl border border-white/10 max-w-sm w-full z-[100]">
-        <div class="p-6 text-center">
-            <div class="mx-auto w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mb-4 text-red-400">
-                <i data-lucide="alert-triangle"></i>
+    <div class="ambient-glow"></div>
+    <div class="ambient-glow-2"></div>
+
+    <!-- Sidebar (Desktop) -->
+    <aside id="sidebar" class="hidden md:flex flex-col w-[260px] h-full glass-panel border-r border-r-white/5 z-20">
+        <div class="p-5 flex items-center gap-3 border-b border-white/5">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-white/10">
+                <i data-lucide="sparkles" class="w-4 h-4 text-blue-400"></i>
             </div>
-            <h3 id="confirm-title" class="text-lg font-semibold mb-2">Bist du sicher?</h3>
-            <p id="confirm-msg" class="text-secondary text-sm mb-6">Diese Aktion kann nicht rückgängig gemacht werden.</p>
-            <div class="flex gap-3 justify-center">
-                <button id="confirm-cancel" class="px-5 py-2 rounded-xl text-sm font-medium hover:bg-white/5 transition">Abbrechen</button>
-                <button id="confirm-ok" class="px-5 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-red-500/20">Bestätigen</button>
-            </div>
+            <span class="font-medium text-gray-100 tracking-tight">NeoAI</span>
         </div>
-    </dialog>
 
-    <!-- Mobile Header (Glass) -->
-    <div class="md:hidden fixed top-0 left-0 right-0 h-16 glass z-50 flex items-center justify-between px-4">
-        <button id="menu-btn" class="p-2 text-secondary hover:text-primary transition"><i data-lucide="menu"></i></button>
-        <div class="flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
-            <span class="font-bold tracking-tight">NeoAI</span>
+        <div class="flex-1 overflow-y-auto p-3 space-y-1" id="chat-list">
+            <!-- Dynamisch -->
         </div>
-        <button id="new-chat-mobile" class="p-2 text-secondary hover:text-primary transition"><i data-lucide="plus"></i></button>
-    </div>
 
-    <!-- Sidebar (Glass on Desktop) -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-[280px] bg-black/50 sidebar-glass md:bg-transparent md:glass border-r border-white/5 flex flex-col transform -translate-x-full md:translate-x-0 transition-transform duration-300 pt-16 md:pt-0">
-        <div class="p-5 hidden md:flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center border border-white/10">
-                    <i data-lucide="cpu" class="w-5 h-5 text-white"></i>
-                </div>
-                <span class="font-bold text-lg tracking-tight">NeoAI</span>
-            </div>
-            <button id="new-chat-btn" class="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition border border-white/5" title="Neuer Chat">
+        <div class="p-3 border-t border-white/5">
+             <button id="new-chat-btn" class="w-full glass-button py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-gray-300 hover:text-white mb-2">
                 <i data-lucide="plus" class="w-4 h-4"></i>
+                Neuer Chat
             </button>
-        </div>
-
-        <div class="flex-1 overflow-y-auto px-3 space-y-1 py-2" id="chat-history-list">
-            <!-- Chat Items -->
-        </div>
-
-        <div class="p-4 border-t border-white/5">
-            <button id="settings-btn" class="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 text-sm text-secondary hover:text-primary transition">
-                <i data-lucide="settings" class="w-4 h-4"></i>
-                <span>Einstellungen</span>
+            <button id="settings-trigger" class="w-full glass-button py-2.5 px-4 rounded-xl flex items-center justify-start gap-3 text-sm text-gray-400 hover:text-white">
+                <i data-lucide="settings-2" class="w-4 h-4"></i>
+                Einstellungen
             </button>
         </div>
     </aside>
 
-    <!-- Mobile Overlay -->
-    <div id="sidebar-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 opacity-0 pointer-events-none transition-opacity duration-300 md:hidden"></div>
+    <!-- Mobile Header -->
+    <header class="md:hidden fixed top-0 left-0 right-0 h-14 glass-panel z-50 flex items-center justify-between px-4 border-b border-white/5">
+        <button id="mobile-menu-btn" class="p-2 text-gray-400 active:text-white"><i data-lucide="menu"></i></button>
+        <div class="flex items-center gap-2">
+             <i data-lucide="sparkles" class="w-4 h-4 text-blue-400"></i>
+             <span class="font-medium">NeoAI</span>
+        </div>
+        <button id="mobile-new-chat" class="p-2 text-gray-400 active:text-white"><i data-lucide="plus"></i></button>
+    </header>
 
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col relative w-full h-full pt-16 md:pt-0">
+    <!-- Mobile Sidebar Overlay -->
+    <div id="mobile-overlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 hidden md:hidden opacity-0 transition-opacity duration-300"></div>
+    <aside id="mobile-sidebar" class="fixed inset-y-0 left-0 w-[280px] bg-[#09090b] z-50 transform -translate-x-full transition-transform duration-300 md:hidden flex flex-col border-r border-white/10">
+        <!-- Content clone of desktop sidebar via JS or structure -->
+        <div class="p-5 flex items-center justify-between border-b border-white/5">
+            <span class="font-bold">Verlauf</span>
+            <button id="close-mobile-nav" class="p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-3" id="mobile-chat-list"></div>
+        <div class="p-4 border-t border-white/5">
+            <button id="mobile-settings-btn" class="flex items-center gap-3 text-sm text-gray-400"><i data-lucide="settings"></i> Einstellungen</button>
+        </div>
+    </aside>
+
+    <!-- Main Chat Area -->
+    <main class="flex-1 flex flex-col h-full relative z-10 pt-14 md:pt-0">
         
-        <!-- INTRO / ONBOARDING SCREEN -->
-        <div id="intro-screen" class="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 bg-background space-y-8 glass-strong">
-            <div class="relative w-24 h-24 mb-4 animate-float">
-                <div class="absolute inset-0 bg-blue-500/20 rounded-full blur-xl"></div>
-                <div class="relative w-full h-full bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md shadow-2xl">
-                    <i data-lucide="zap" class="w-10 h-10 text-white"></i>
-                </div>
+        <!-- Welcome Screen (Onboarding) -->
+        <div id="welcome-screen" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-30 bg-background/50 backdrop-blur-md">
+            <div class="w-20 h-20 bg-gradient-to-tr from-blue-500/10 to-purple-500/10 rounded-2xl flex items-center justify-center border border-white/10 mb-6 shadow-2xl shadow-blue-900/20">
+                <i data-lucide="cpu" class="w-10 h-10 text-white/80"></i>
             </div>
+            <h1 class="text-3xl md:text-4xl font-semibold text-white mb-3 tracking-tight">Private AI. Local.</h1>
+            <p class="text-gray-400 max-w-md mb-8 text-sm md:text-base leading-relaxed">
+                Das Modell läuft vollständig in deinem Browser via WebGPU.<br>
+                Keine Cloud, keine Kosten, deine Daten.
+            </p>
             
-            <div class="text-center max-w-lg space-y-4">
-                <h1 class="text-4xl md:text-5xl font-bold bg-gradient-to-b from-white to-gray-500 bg-clip-text text-transparent tracking-tight">
-                    NeoAI Local
-                </h1>
-                <p class="text-secondary text-lg leading-relaxed">
-                    Echte KI, die vollständig auf deinem Gerät läuft.<br>
-                    Keine Cloud. Kein Tracking. 100% Privat.
+            <button id="init-btn" class="group relative px-8 py-3 bg-white text-black font-medium rounded-full overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)]">
+                <span class="relative z-10 flex items-center gap-2">
+                    Modell laden (~1GB)
+                    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </span>
+            </button>
+        </div>
+
+        <!-- Download Overlay -->
+        <div id="download-overlay" class="hidden absolute inset-0 z-40 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-8">
+            <div class="w-full max-w-sm">
+                <div class="flex justify-between text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">
+                    <span id="download-status">Verbindung herstellen...</span>
+                    <span id="download-percent">0%</span>
+                </div>
+                <!-- Custom Progress Bar -->
+                <div class="h-1 w-full bg-white/10 rounded-full overflow-hidden mb-6">
+                    <div id="progress-bar-fill" class="h-full bg-blue-500 w-0 transition-all duration-150 ease-out shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                </div>
+                
+                <p class="text-center text-xs text-gray-500 leading-relaxed max-w-xs mx-auto">
+                    Dies geschieht nur einmal. Das Modell wird im Cache gespeichert.<br>Bitte schließe den Tab nicht.
                 </p>
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-lg mt-4">
-                <div class="p-4 rounded-2xl bg-white/5 border border-white/5 flex flex-col items-center text-center">
-                    <i data-lucide="wifi-off" class="w-6 h-6 mb-2 text-gray-400"></i>
-                    <span class="font-medium">Offline Ready</span>
-                    <span class="text-xs text-gray-500">Funktioniert ohne Internet</span>
-                </div>
-                <div class="p-4 rounded-2xl bg-white/5 border border-white/5 flex flex-col items-center text-center">
-                    <i data-lucide="database" class="w-6 h-6 mb-2 text-gray-400"></i>
-                    <span class="font-medium">WebGPU</span>
-                    <span class="text-xs text-gray-500">Hardware-beschleunigt</span>
-                </div>
-            </div>
-
-            <button id="start-onboarding-btn" class="group mt-8 px-8 py-4 bg-white text-black rounded-full text-lg font-bold hover:bg-gray-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] flex items-center gap-2">
-                Jetzt Starten
-                <i data-lucide="arrow-right" class="w-5 h-5 group-hover:translate-x-1 transition-transform"></i>
-            </button>
-            <p class="text-xs text-secondary/50 max-w-xs text-center">
-                Durch Klicken stimmst du dem Download des Modells (~1GB) auf dein Gerät zu.
-            </p>
+            <button id="cancel-download" class="mt-8 text-sm text-red-400 hover:text-red-300 transition opacity-60 hover:opacity-100">Abbrechen</button>
         </div>
 
-        <!-- LOADING SCREEN -->
-        <div id="loading-screen" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center bg-background glass-strong">
-            <div class="w-full max-w-md p-8 space-y-6">
-                <div class="flex justify-between items-end mb-2">
-                    <h3 class="text-xl font-bold text-white">Modell wird geladen</h3>
-                    <span id="loading-percentage" class="text-2xl font-mono text-blue-400">0%</span>
-                </div>
-                
-                <!-- Progress Bar Container -->
-                <div class="relative h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div id="loading-bar" class="absolute top-0 left-0 h-full bg-blue-500 transition-all duration-300 w-0 shadow-[0_0_10px_#3b82f6]"></div>
-                </div>
-                
-                <div class="space-y-2">
-                    <div id="loading-step-download" class="flex items-center gap-3 text-sm text-secondary opacity-50 transition-opacity">
-                        <div class="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">1</div>
-                        <span>Dateien herunterladen (~500MB compressed)</span>
-                    </div>
-                    <div id="loading-step-gpu" class="flex items-center gap-3 text-sm text-secondary opacity-50 transition-opacity">
-                        <div class="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">2</div>
-                        <span>In den GPU-Speicher laden</span>
-                    </div>
-                </div>
-
-                <p id="loading-detail" class="text-xs font-mono text-secondary/50 text-center pt-4">Initialisiere Umgebung...</p>
-                
-                <div class="flex justify-center pt-8">
-                     <button id="cancel-load-btn" class="text-red-400 text-sm hover:underline">Abbrechen</button>
-                </div>
+        <!-- Chat Messages -->
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth">
+            <!-- Messages go here -->
+            <div id="empty-state" class="hidden h-full flex flex-col items-center justify-center opacity-30 pointer-events-none">
+                <i data-lucide="message-square-dashed" class="w-12 h-12 mb-4"></i>
+                <p>Chat gestartet</p>
             </div>
         </div>
 
-        <!-- CHAT INTERFACE -->
-        <div id="chat-interface" class="flex-1 flex flex-col hidden h-full">
-            <!-- Messages Area with Padding to avoid being behind header/footer -->
-            <div id="chat-container" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth max-w-3xl mx-auto w-full">
-                <!-- Empty State within chat -->
-                <div id="empty-chat-placeholder" class="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50">
-                    <i data-lucide="message-square" class="w-12 h-12 text-secondary"></i>
-                    <p class="text-secondary">Schreibe eine Nachricht, um zu beginnen.</p>
+        <!-- Input Area -->
+        <div class="p-4 md:p-6 w-full max-w-3xl mx-auto z-20">
+            <div class="relative glass-panel rounded-3xl p-1.5 transition-colors focus-within:bg-white/[0.02] focus-within:border-white/10 shadow-2xl">
+                <textarea 
+                    id="user-input" 
+                    rows="1" 
+                    placeholder="Frag mich etwas..." 
+                    class="w-full bg-transparent text-gray-100 px-4 py-3 focus:outline-none resize-none max-h-48 text-[15px] placeholder-gray-600 rounded-2xl"
+                    style="min-height: 54px;"
+                ></textarea>
+                
+                <div class="absolute bottom-2.5 right-2.5">
+                    <button 
+                        id="send-btn" 
+                        class="p-2 bg-white text-black rounded-xl hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg active:scale-95"
+                    >
+                        <i data-lucide="arrow-up" class="w-5 h-5"></i>
+                    </button>
                 </div>
             </div>
-
-            <!-- Input Area (Floating Style) -->
-            <div class="p-4 md:p-6 w-full max-w-3xl mx-auto">
-                <div class="relative glass rounded-3xl p-2 shadow-2xl border border-white/5 transition-all focus-within:border-white/20 focus-within:ring-1 focus-within:ring-white/10">
-                    <textarea 
-                        id="user-input" 
-                        rows="1" 
-                        placeholder="Schreibe etwas..." 
-                        class="w-full bg-transparent text-primary placeholder-secondary/50 text-base px-4 py-3 focus:outline-none resize-none max-h-48"
-                        style="min-height: 52px;"
-                    ></textarea>
-                    
-                    <div class="flex items-center justify-between px-2 pb-1">
-                        <div class="text-xs text-secondary/40 flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                            <span>Model Ready</span>
-                        </div>
-                        <button 
-                            id="send-btn" 
-                            class="p-2.5 bg-white text-black rounded-xl hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                        >
-                            <i data-lucide="arrow-up" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                </div>
+            <div class="text-center mt-2">
+                 <p class="text-[10px] text-gray-600">Qwen2.5-0.5B-Instruct @ WebGPU • Errors possible.</p>
             </div>
         </div>
+
     </main>
 
     <!-- Settings Modal -->
-    <dialog id="settings-modal" class="glass-strong text-primary p-0 rounded-2xl shadow-2xl border border-white/10 max-w-md w-full backdrop:bg-black/80">
-        <div class="p-6">
-            <div class="flex items-center justify-between mb-8">
-                <h2 class="text-xl font-bold">Einstellungen</h2>
-                <button id="close-settings" class="p-1 hover:bg-white/10 rounded-lg transition"><i data-lucide="x"></i></button>
-            </div>
-
-            <div class="space-y-6">
-                <div class="bg-white/5 border border-white/5 rounded-xl p-4">
-                    <h3 class="font-semibold mb-1 text-sm text-gray-300">Speicherverwaltung</h3>
-                    <p class="text-xs text-secondary mb-4">Verwalte deine lokalen Daten.</p>
-                    
-                    <div class="space-y-3">
-                        <button id="delete-history-btn" class="w-full flex items-center justify-between px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition group">
-                            <span>Alle Chats löschen</span>
-                            <i data-lucide="trash" class="w-4 h-4 text-secondary group-hover:text-red-400 transition"></i>
-                        </button>
-                        <button id="delete-model-btn" class="w-full flex items-center justify-between px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition group">
-                            <span>Modell-Daten löschen</span>
-                            <i data-lucide="database" class="w-4 h-4 text-secondary group-hover:text-red-400 transition"></i>
-                        </button>
+    <dialog id="settings-dialog" class="bg-[#0c0c0c] text-white rounded-2xl border border-white/10 w-full max-w-md p-0 shadow-2xl backdrop:backdrop-blur-sm">
+        <div class="p-5 border-b border-white/5 flex justify-between items-center">
+            <h2 class="font-medium">Einstellungen</h2>
+            <form method="dialog"><button class="text-gray-500 hover:text-white"><i data-lucide="x"></i></button></form>
+        </div>
+        <div class="p-5 space-y-6">
+            <div class="space-y-4">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Daten & Speicher</h3>
+                
+                <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
+                    <div>
+                        <div class="text-sm font-medium">Chat Verlauf</div>
+                        <div class="text-xs text-gray-500">Alle Nachrichten lokal löschen</div>
                     </div>
+                    <button id="clear-chats" class="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-red-400 transition">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
                 </div>
 
-                <div class="text-[10px] text-secondary/30 text-center font-mono">
-                    NeoAI v1.2 • Local Qwen2.5-0.5B • WebGPU
+                <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
+                    <div>
+                        <div class="text-sm font-medium">Modell Cache</div>
+                        <div class="text-xs text-gray-500">~1GB Daten freigeben</div>
+                    </div>
+                    <button id="clear-cache" class="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-red-400 transition">
+                        <i data-lucide="database" class="w-4 h-4"></i>
+                    </button>
                 </div>
+            </div>
+            
+            <div class="pt-2 text-center">
+                 <p class="text-[10px] text-gray-600">Version 2.0.0 • Transformers.js v3</p>
             </div>
         </div>
     </dialog>
@@ -315,315 +329,278 @@
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.0-alpha.19';
 
+        // Icons
         lucide.createIcons();
 
         // --- Config ---
+        // WICHTIGE ÄNDERUNG: Nutzung des "onnx-community" Namespace für garantierte Kompatibilität mit v3
+        const MODEL_ID = 'onnx-community/Qwen2.5-0.5B-Instruct'; 
+        
         env.allowLocalModels = false;
         env.useBrowserCache = true;
-        const MODEL_ID = 'Qwen/Qwen2.5-0.5B-Instruct';
+        // Optional: Falls WebGPU Probleme macht, könnten wir wasm fallbacken, aber der User will WebGPU.
+        // Wir lassen es auf default, transformers.js v3 wählt das backend basierend auf device option.
 
-        // --- State ---
         const state = {
-            chats: [],
-            currentChatId: null,
+            chats: JSON.parse(localStorage.getItem('neoai_chats_v2') || '[]'),
+            activeChatId: null,
             isGenerating: false,
             modelReady: false,
         };
 
-        // --- DOM Elements ---
-        const UI = {
-            screens: {
-                intro: document.getElementById('intro-screen'),
-                loading: document.getElementById('loading-screen'),
-                chat: document.getElementById('chat-interface'),
-            },
-            modals: {
-                settings: document.getElementById('settings-modal'),
-                confirm: document.getElementById('confirm-modal'),
-            },
+        let pipe = null;
+
+        // --- UI Refs ---
+        const els = {
+            welcome: document.getElementById('welcome-screen'),
+            download: document.getElementById('download-overlay'),
+            chatArea: document.getElementById('chat-messages'),
             input: document.getElementById('user-input'),
             sendBtn: document.getElementById('send-btn'),
-            chatContainer: document.getElementById('chat-container'),
-            historyList: document.getElementById('chat-history-list'),
-            placeholder: document.getElementById('empty-chat-placeholder'),
-            sidebar: document.getElementById('sidebar'),
-            overlay: document.getElementById('sidebar-overlay'),
-            confirm: {
-                title: document.getElementById('confirm-title'),
-                msg: document.getElementById('confirm-msg'),
-                cancel: document.getElementById('confirm-cancel'),
-                ok: document.getElementById('confirm-ok'),
-            },
-            loading: {
-                bar: document.getElementById('loading-bar'),
-                percent: document.getElementById('loading-percentage'),
-                stepDownload: document.getElementById('loading-step-download'),
-                stepGpu: document.getElementById('loading-step-gpu'),
-                detail: document.getElementById('loading-detail'),
+            chatList: document.getElementById('chat-list'),
+            mobileChatList: document.getElementById('mobile-chat-list'),
+            settingsDialog: document.getElementById('settings-dialog'),
+            progressBar: document.getElementById('progress-bar-fill'),
+            progressPercent: document.getElementById('download-percent'),
+            progressStatus: document.getElementById('download-status'),
+            nav: {
+                desktop: document.getElementById('sidebar'),
+                mobile: document.getElementById('mobile-sidebar'),
+                overlay: document.getElementById('mobile-overlay'),
             }
         };
 
-        // --- Core Application Flow ---
-
-        async function initApp() {
-            loadChats();
+        // --- Init ---
+        async function init() {
+            renderChatList();
             
-            // Check localStorage for onboarding flag
-            const onboardingDone = localStorage.getItem('neoai_onboarding_completed') === 'true';
-
-            if (!onboardingDone) {
-                // Show Intro
-                switchScreen('intro');
+            // Check if model was previously loaded (naive check via localstorage flag)
+            const modelCached = localStorage.getItem('neoai_model_cached') === 'true';
+            
+            if (state.chats.length > 0) {
+                // Restore last session
+                loadChat(state.chats[0].id);
             } else {
-                // Skip intro, go to chat, load model in background or on demand
-                // User requirement: "loading screen model, loads then comes main screen"
-                // So we do the loading sequence every time to ensure model is ready in RAM
-                 switchScreen('loading');
-                 startModelLoading();
+                createNewChat(true); // silent create
+            }
+
+            if(modelCached) {
+                // If cached, we can technically skip big welcome, but user might want to confirm load
+                // We keep welcome screen as "Start" button essentially
+                els.welcome.classList.remove('hidden');
+            } else {
+                els.welcome.classList.remove('hidden');
             }
         }
 
-        function switchScreen(screenName) {
-            Object.values(UI.screens).forEach(el => el.classList.add('hidden'));
-            UI.screens[screenName].classList.remove('hidden');
-        }
-
-        // --- Onboarding & Loading ---
-
-        document.getElementById('start-onboarding-btn').addEventListener('click', () => {
-            localStorage.setItem('neoai_onboarding_completed', 'true');
-            switchScreen('loading');
-            startModelLoading();
-        });
-
-        document.getElementById('cancel-load-btn').addEventListener('click', () => {
-            location.reload();
-        });
-
-        let pipe = null;
-
-        async function startModelLoading() {
+        // --- Model Loading ---
+        document.getElementById('init-btn').addEventListener('click', async () => {
+            els.welcome.classList.add('hidden');
+            els.download.classList.remove('hidden');
+            
             try {
-                UI.loading.stepDownload.style.opacity = '1';
-                UI.loading.stepDownload.querySelector('div').classList.add('bg-blue-500', 'border-blue-500', 'text-black');
-                
-                const progressCallback = (info) => {
-                    // Update UI based on info
-                    if (info.status === 'progress') {
-                        const percent = info.progress ? Math.round(info.progress) : 0;
-                        UI.loading.bar.style.width = `${percent}%`;
-                        UI.loading.percent.textContent = `${percent}%`;
-                        if(info.file) UI.loading.detail.textContent = `Lade ${info.file}...`;
-                        
-                        // Wenn Download fast fertig, aktiviere GPU Schritt visuell
-                        if(percent > 95) {
-                            UI.loading.stepGpu.style.opacity = '1';
-                            UI.loading.stepDownload.querySelector('div').innerHTML = '<i data-lucide="check" class="w-3 h-3"></i>';
-                            lucide.createIcons();
-                        }
-                    } else if (info.status === 'initiate') {
-                         UI.loading.stepGpu.style.opacity = '1';
-                         UI.loading.stepGpu.querySelector('div').classList.add('bg-blue-500', 'border-blue-500', 'text-black');
-                         UI.loading.detail.textContent = "Kompiliere Shader & lade in VRAM...";
-                    } else if (info.status === 'done') {
-                        // File done
-                    }
-                };
-
-                // Initialize Pipeline
+                // Start Pipeline
                 pipe = await pipeline('text-generation', MODEL_ID, {
                     device: 'webgpu',
-                    dtype: 'q4', // Low VRAM usage
-                    progress_callback: progressCallback,
+                    dtype: 'q4', // Quantized for 0.5B is standard
+                    progress_callback: (info) => {
+                        if(info.status === 'initiate') {
+                             els.progressStatus.textContent = "Initialisiere GPU...";
+                        } else if (info.status === 'progress') {
+                            // Calculate total progress if possible or just show current file
+                            const percent = info.progress ? Math.round(info.progress) : 0;
+                            els.progressBar.style.width = `${percent}%`;
+                            els.progressPercent.textContent = `${percent}%`;
+                            
+                            if (info.file) {
+                                els.progressStatus.textContent = `Lade ${info.file}...`;
+                            }
+                        } else if (info.status === 'done') {
+                             els.progressBar.style.width = `100%`;
+                        }
+                    }
                 });
                 
-                // Finished
-                UI.loading.bar.style.width = '100%';
-                UI.loading.percent.textContent = '100%';
-                UI.loading.stepGpu.querySelector('div').innerHTML = '<i data-lucide="check" class="w-3 h-3"></i>';
-                lucide.createIcons();
-                
+                // Done
                 state.modelReady = true;
+                localStorage.setItem('neoai_model_cached', 'true');
+                
+                // Hide loader with fade
+                els.download.style.opacity = '0';
+                els.download.style.transition = 'opacity 0.5s ease';
                 setTimeout(() => {
-                    switchScreen('chat');
-                    // Ggf. neuen Chat erstellen wenn keiner da
-                    if(state.chats.length === 0) createNewChat();
-                    else loadChat(state.chats[0].id);
-                }, 800);
+                    els.download.classList.add('hidden');
+                }, 500);
 
             } catch (err) {
-                console.error(err);
-                if (err.message.includes("WebGPU")) {
-                   alert("Fehler: WebGPU wird nicht unterstützt oder ist deaktiviert.");
-                } else {
-                   alert("Fehler beim Laden des Modells: " + err.message);
-                }
-                // Reset onboarding so user can try again clearly
-                // localStorage.removeItem('neoai_onboarding_completed');
+                console.error("Model Error:", err);
+                alert(`Fehler beim Laden des Modells:\n${err.message}\n\nStelle sicher, dass dein Browser WebGPU unterstützt.`);
+                location.reload();
             }
-        }
+        });
 
+        document.getElementById('cancel-download').addEventListener('click', () => location.reload());
 
         // --- Chat Logic ---
 
-        function loadChats() {
-            const stored = localStorage.getItem('neoai_chats');
-            if (stored) state.chats = JSON.parse(stored);
-            renderHistory();
-        }
-
-        function saveChats() {
-            localStorage.setItem('neoai_chats', JSON.stringify(state.chats));
-            renderHistory();
-        }
-
-        function createNewChat() {
+        function createNewChat(silent = false) {
             const newChat = {
                 id: Date.now().toString(),
                 title: 'Neuer Chat',
                 messages: [],
-                timestamp: Date.now()
+                updatedAt: Date.now()
             };
             state.chats.unshift(newChat);
-            loadChat(newChat.id);
-            closeMobileMenu();
+            saveChats();
+            if(!silent) loadChat(newChat.id);
+            renderChatList();
+            if(window.innerWidth < 768) closeMobileNav();
         }
 
         function loadChat(id) {
-            state.currentChatId = id;
+            state.activeChatId = id;
             const chat = state.chats.find(c => c.id === id);
             
-            // Clean UI
-            UI.chatContainer.innerHTML = '';
-            UI.chatContainer.appendChild(UI.placeholder); // Add placeholder back
+            // Clear & Render
+            els.chatArea.innerHTML = '';
             
-            if (chat.messages.length > 0) {
-                UI.placeholder.classList.add('hidden');
-                chat.messages.forEach(msg => renderMessage(msg.role, msg.content));
+            if (chat && chat.messages.length > 0) {
+                chat.messages.forEach(msg => appendMessage(msg.role, msg.content, false));
+                document.getElementById('empty-state').classList.add('hidden');
             } else {
-                UI.placeholder.classList.remove('hidden');
+                document.getElementById('empty-state').classList.remove('hidden');
             }
             
-            renderHistory();
-            scrollToBottom();
+            renderChatList();
         }
 
-        function renderHistory() {
-            UI.historyList.innerHTML = '';
-            state.chats.forEach(chat => {
-                const btn = document.createElement('button');
-                const isActive = state.currentChatId === chat.id;
-                btn.className = `w-full text-left px-3 py-2.5 rounded-lg text-sm mb-1 flex items-center justify-between group transition ${isActive ? 'bg-white/10 text-white font-medium' : 'text-secondary hover:bg-white/5 hover:text-primary'}`;
+        function saveChats() {
+            localStorage.setItem('neoai_chats_v2', JSON.stringify(state.chats));
+            renderChatList();
+        }
+
+        function renderChatList() {
+            const html = state.chats.map(chat => {
+                const isActive = chat.id === state.activeChatId;
+                const classes = isActive 
+                    ? "bg-white/10 text-white border-white/5" 
+                    : "text-gray-400 hover:bg-white/5 hover:text-gray-200 border-transparent";
                 
-                btn.innerHTML = `
-                    <span class="truncate pr-2">${chat.title || 'Neuer Chat'}</span>
-                    <div class="opacity-0 group-hover:opacity-100 hover:text-red-400 p-1 rounded transition stop-prop">
-                        <i data-lucide="x" class="w-3 h-3"></i>
-                    </div>
+                return `
+                    <button onclick="window.loadChatById('${chat.id}')" class="w-full text-left px-3 py-2.5 rounded-lg text-sm mb-1 border ${classes} transition-all truncate group flex justify-between items-center">
+                        <span class="truncate">${chat.title}</span>
+                        ${isActive ? '' : '<i data-lucide="chevron-right" class="w-3 h-3 opacity-0 group-hover:opacity-50"></i>'}
+                    </button>
                 `;
-                
-                // Delete Click
-                btn.querySelector('.stop-prop').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteChat(chat.id);
-                });
-                
-                btn.addEventListener('click', () => loadChat(chat.id));
-                UI.historyList.appendChild(btn);
-            });
+            }).join('');
+            
+            els.chatList.innerHTML = html;
+            els.mobileChatList.innerHTML = html;
             lucide.createIcons();
         }
 
-        function deleteChat(id) {
-            state.chats = state.chats.filter(c => c.id !== id);
-            saveChats();
-            if (state.currentChatId === id) {
-                if(state.chats.length > 0) loadChat(state.chats[0].id);
-                else createNewChat();
-            } else {
-                renderHistory(); // Refresh list distinct
-            }
-        }
+        // Global exposing for onclick
+        window.loadChatById = (id) => loadChat(id);
 
-        function renderMessage(role, content, animated = false) {
-            UI.placeholder.classList.add('hidden');
+        function appendMessage(role, content, animate = false) {
+            document.getElementById('empty-state').classList.add('hidden');
             
-            const wrapper = document.createElement('div');
-            wrapper.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            const div = document.createElement('div');
+            div.className = `flex w-full ${role === 'user' ? 'justify-end' : 'justify-start'} animate-[fadeIn_0.3s_ease-out]`;
+            
+            // Styling based on Pathly/Clean look
+            // User: Minimal rounded block, off-black/grey
+            // AI: Transparent, Markdown
             
             const bubble = document.createElement('div');
-            // Design: User = White bubble, Black text. AI = Transparent/Glass, White text.
+            
             if (role === 'user') {
-                bubble.className = "max-w-[85%] md:max-w-[70%] bg-white text-black px-5 py-3.5 rounded-2xl rounded-br-none shadow-lg text-sm md:text-base";
-                bubble.textContent = content; // Secure text
+                bubble.className = "max-w-[85%] md:max-w-[70%] bg-[#1a1a1a] text-gray-100 px-5 py-3 rounded-2xl border border-white/5 shadow-sm text-[15px] leading-relaxed";
+                bubble.textContent = content; 
             } else {
-                bubble.className = "max-w-[90%] md:max-w-[80%] px-2 py-2 text-primary prose prose-invert text-sm md:text-base";
+                bubble.className = "max-w-[90%] md:max-w-[85%] px-2 py-2 text-gray-300 prose prose-invert prose-headings:text-gray-100 prose-p:text-gray-300 prose-strong:text-white text-[15px]"; // No background for AI mostly
                 bubble.innerHTML = DOMPurify.sanitize(marked.parse(content));
             }
+            
+            if (animate) bubble.classList.add('cursor-blink');
 
-            if(animated) bubble.classList.add('typing-cursor');
+            div.appendChild(bubble);
+            els.chatArea.appendChild(div);
+            
+            // Scroll logic
+            requestAnimationFrame(() => {
+                els.chatArea.scrollTop = els.chatArea.scrollHeight;
+            });
 
-            wrapper.appendChild(bubble);
-            UI.chatContainer.appendChild(wrapper);
-            scrollToBottom();
             return bubble;
         }
 
-        function scrollToBottom() {
-            UI.chatContainer.scrollTop = UI.chatContainer.scrollHeight;
-        }
-
-        // --- Interaction ---
+        // --- Generation ---
 
         async function handleSend() {
-            const text = UI.input.value.trim();
+            const text = els.input.value.trim();
             if (!text || state.isGenerating) return;
 
-            UI.input.value = '';
-            UI.input.style.height = '52px';
-            
-            // Add User Msg
-            const chat = state.chats.find(c => c.id === state.currentChatId);
-            chat.messages.push({ role: 'user', content: text, timestamp: Date.now() });
-            
-            // Update Title if new
-            if (chat.messages.length === 1) {
-                chat.title = text.slice(0, 24) + (text.length > 24 ? '...' : '');
-                saveChats(); // Save title
+            if(!state.modelReady) {
+                 // Try auto-init if user bypassed onboarding somehow
+                 // But ideally button is disabled.
+                 alert("Bitte lade erst das Modell (Button im Startscreen).");
+                 return;
             }
 
-            renderMessage('user', text);
+            // UI Reset
+            els.input.value = '';
+            els.input.style.height = '54px';
+            
+            // Update State
+            const chat = state.chats.find(c => c.id === state.activeChatId);
+            if(!chat) return; // Should not happen
+            
+            chat.messages.push({ role: 'user', content: text, timestamp: Date.now() });
+            
+            // Auto Title
+            if(chat.messages.length === 1) {
+                chat.title = text.slice(0, 30);
+                saveChats();
+            }
 
-            // Generate
+            appendMessage('user', text);
+            
+            // Prepare Generation
             state.isGenerating = true;
-            UI.sendBtn.disabled = true;
-
-            const aiBubble = renderMessage('assistant', '', true);
+            els.sendBtn.disabled = true;
+            
+            const aiBubble = appendMessage('assistant', '', true);
             let fullResponse = "";
 
             try {
-                 // Construct Prompt
-                const history = chat.messages.map(m => 
-                    `<|im_start|>${m.role}\n${m.content}<|im_end|>\n`
-                ).join('');
-                const prompt = `<|im_start|>system\nDu bist NeoAI, ein hilfreicher Assistent.<|im_end|>\n${history}<|im_start|>assistant\n`;
-
-                // Run Generation
+                // Construct Chat Prompt (Qwen format)
+                const messages = [
+                    { role: 'system', content: 'Du bist NeoAI, ein intelligenter Assistent. Antworte präzise auf Deutsch.' },
+                    ...chat.messages
+                    // Note: Transformers.js v3 apply_chat_template feature is WIP in JS.
+                    // We construct prompt manually for Qwen which is usually ChatML
+                ];
+                
+                // Manual ChatML construction
+                const prompt = messages.map(m => `<|im_start|>${m.role}\n${m.content}<|im_end|>\n`).join('') + "<|im_start|>assistant\n";
+                
+                // Generate
                 const output = await pipe(prompt, {
                     max_new_tokens: 512,
                     temperature: 0.7,
                     do_sample: true,
-                    // Streaming simulation via callback patch or monolithic wait
-                    callback_function: (beams) => {
-                         // V3 Alpha changes often, beam output inspection is tricky locally without streamer
-                    }
+                    // Note: Real streaming in v3 JS is tricky. We'll simulate typing effect if batch returns, 
+                    // or use the streamer if supported.
+                    // Let's rely on standard await for stability as requested "löse alle probleme".
                 });
+
+                const raw = output[0].generated_text;
+                // Extract new part
+                let response = raw.substring(prompt.length);
+                response = response.replace('<|im_end|>', '');
                 
-                // Get result
-                const generatedText = output[0].generated_text;
-                let responseContent = generatedText.substring(prompt.length).replace('<|im_end|>', '').trim();
-                
-                fullResponse = responseContent;
+                fullResponse = response;
                 aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullResponse));
                 
                 // Save
@@ -631,100 +608,70 @@
                 saveChats();
 
             } catch (err) {
-                 aiBubble.innerHTML = `<span class="text-red-400">Fehler: ${err.message}</span>`;
+                aiBubble.innerHTML = `<span class="text-red-400 text-sm">Fehler: ${err.message}</span>`;
             } finally {
-                aiBubble.classList.remove('typing-cursor');
+                aiBubble.classList.remove('cursor-blink');
                 state.isGenerating = false;
-                UI.sendBtn.disabled = false;
-                UI.input.focus();
+                els.sendBtn.disabled = false;
+                els.input.focus();
             }
         }
 
-        // --- Custom Confirmation Dialog ---
-        function showConfirm(title, msg, onConfirm) {
-            UI.confirm.title.textContent = title;
-            UI.confirm.msg.textContent = msg;
-            
-            const handleOk = () => {
-                onConfirm();
-                UI.modals.confirm.close();
-                cleanup();
-            };
-            const handleCancel = () => {
-                UI.modals.confirm.close();
-                cleanup();
-            };
-            const cleanup = () => {
-                UI.confirm.ok.removeEventListener('click', handleOk);
-                UI.confirm.cancel.removeEventListener('click', handleCancel);
-            };
-
-            UI.confirm.ok.addEventListener('click', handleOk);
-            UI.confirm.cancel.addEventListener('click', handleCancel);
-            
-            UI.modals.confirm.showModal();
-        }
-
-        // --- Settings Functionality ---
-
-        document.getElementById('settings-btn').addEventListener('click', () => UI.modals.settings.showModal());
-        document.getElementById('close-settings').addEventListener('click', () => UI.modals.settings.close());
-        
-        document.getElementById('delete-history-btn').addEventListener('click', () => {
-             showConfirm('Verlauf löschen?', 'Alle deine Chats werden unwiderruflich gelöscht.', () => {
-                 state.chats = [];
-                 state.currentChatId = null;
-                 saveChats();
-                 createNewChat();
-                 UI.modals.settings.close();
-             });
-        });
-
-        document.getElementById('delete-model-btn').addEventListener('click', () => {
-            showConfirm('Cache leeren?', 'Das Modell (~1GB) muss beim nächsten Mal erneut geladen werden.', async () => {
-                try {
-                    const cacheNames = await caches.keys();
-                    for (const name of cacheNames) {
-                        if (name.includes('transformers')) await caches.delete(name);
-                    }
-                    localStorage.removeItem('neoai_onboarding_completed'); // Reset onboarding
-                    location.reload(); 
-                } catch(e) { console.error(e); }
-            });
-        });
-
-        // --- Global Events ---
-        
-        UI.input.addEventListener('keydown', (e) => {
-            if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+        // --- Event Listeners ---
+        els.sendBtn.addEventListener('click', handleSend);
+        els.input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
             e.target.style.height = 'auto';
-            e.target.style.height = e.target.scrollHeight + 'px';
+            e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
         });
-        
-        UI.sendBtn.addEventListener('click', handleSend);
-        
-        // Mobile UI
-        const openMobileMenu = () => {
-            UI.sidebar.style.transform = 'translateX(0)';
-            UI.overlay.style.opacity = '1';
-            UI.overlay.style.pointerEvents = 'auto';
+
+        document.getElementById('new-chat-btn').addEventListener('click', () => createNewChat());
+        document.getElementById('mobile-new-chat').addEventListener('click', () => createNewChat());
+
+        // Mobile Nav
+        const openMobileNav = () => {
+            els.nav.mobile.classList.remove('-translate-x-full');
+            els.nav.overlay.classList.remove('hidden');
+            setTimeout(() => els.nav.overlay.classList.remove('opacity-0'), 10);
         };
-        const closeMobileMenu = () => {
-            // Check CSS media query before hiding if desktop
-            if(window.innerWidth < 768) {
-                UI.sidebar.style.transform = 'translateX(-100%)';
-                UI.overlay.style.opacity = '0';
-                UI.overlay.style.pointerEvents = 'none';
+        const closeMobileNav = () => {
+            els.nav.mobile.classList.add('-translate-x-full');
+            els.nav.overlay.classList.add('opacity-0');
+            setTimeout(() => els.nav.overlay.classList.add('hidden'), 300);
+        };
+        
+        document.getElementById('mobile-menu-btn').addEventListener('click', openMobileNav);
+        document.getElementById('close-mobile-nav').addEventListener('click', closeMobileNav);
+        els.nav.overlay.addEventListener('click', closeMobileNav);
+
+        // Settings
+        document.getElementById('settings-trigger').addEventListener('click', () => els.settingsDialog.showModal());
+        document.getElementById('mobile-settings-btn').addEventListener('click', () => els.settingsDialog.showModal());
+
+        document.getElementById('clear-chats').addEventListener('click', () => {
+            if(confirm('Verlauf löschen?')) {
+                state.chats = [];
+                state.activeChatId = null;
+                saveChats();
+                createNewChat();
+                els.settingsDialog.close();
             }
-        };
+        });
 
-        document.getElementById('menu-btn').addEventListener('click', openMobileMenu);
-        UI.overlay.addEventListener('click', closeMobileMenu);
-        document.getElementById('new-chat-btn').addEventListener('click', createNewChat);
-        document.getElementById('new-chat-mobile').addEventListener('click', createNewChat);
+        document.getElementById('clear-cache').addEventListener('click', async () => {
+            if(confirm('Den lokalen Modell-Cache löschen? Der nächste Start dauert wieder länger.')) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map(key => caches.delete(key)));
+                localStorage.removeItem('neoai_model_cached');
+                location.reload();
+            }
+        });
 
-        // --- Initialization ---
-        document.addEventListener('DOMContentLoaded', initApp);
+        // Start
+        init();
 
     </script>
 </body>
