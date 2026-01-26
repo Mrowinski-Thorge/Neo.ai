@@ -1,0 +1,40 @@
+{
+  "nav": {
+    "about": "About",
+    "research": "Research",
+    "contact": "Contact",
+    "lang_switch": "DE"
+  },
+  "hero": {
+    "tagline": "Welcome to Neo AI Labs",
+    "sub_tagline": "The AI Lab for German AI Research"
+  },
+  "about": {
+    "title": "About Neo AI Labs",
+    "text": "Neo AI Labs has been researching advanced AI models since 2026, focusing on safe, efficient, and on-device artificial intelligence."
+  },
+  "research": {
+    "title": "Research & Models",
+    "card_neo_mod": {
+        "title": "Neo Moderation",
+        "purpose": "Real-time complex analysis",
+        "features": "Detects: Hate, Violence, Sexual content, Policy violations",
+        "optimization": "Optimized for on-device AI moderation",
+        "progress": "20% Complete"
+    },
+    "card_future": {
+        "title": "Future Projects",
+        "desc": "More research projects coming soon"
+    }
+  },
+  "privacy": {
+     "title": "Open & Public Focus",
+     "text": "Open research. GitHub-based development. No cookies. No tracking. Privacy-first."
+  },
+  "footer": {
+    "legal": "Legal / Terms",
+    "privacy": "Privacy",
+    "cookies": "No cookies used",
+    "hosted": "Hosted via GitHub Pages"
+  }
+}

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neo AI Labs</title>
+    <link rel="stylesheet" href="../css/main.css">
+    
+    <!-- Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Scripts -->
+    <script src="../js/three-hero.js" defer></script>
+    <script src="../js/app.js" defer></script>
+    
+    <!-- Favicon placeholder -->
+    <link rel="icon" href="data:;base64,=">
+</head>
+<body>
+    <nav>
+        <div class="logo">Neo AI Labs</div>
+        <div class="nav-links">
+            <a href="#about" data-i18n="nav.about">About</a>
+            <a href="#research" data-i18n="nav.research">Research</a>
+            <a href="#about" data-i18n="nav.contact">Contact</a>
+        </div>
+        <button class="lang-switch" data-i18n="nav.lang_switch">DE</button>
+    </nav>
+
+    <div id="hero">
+        <div id="hero-canvas"></div>
+        <div class="hero-content">
+            <h1 data-i18n="hero.tagline">Welcome to Neo AI Labs</h1>
+            <p data-i18n="hero.sub_tagline">The AI Lab for German AI Research</p>
+        </div>
+    </div>
+
+    <section id="about">
+        <h2 data-i18n="about.title">About Neo AI Labs</h2>
+        <p data-i18n="about.text">Neo AI Labs has been researching advanced AI models since 2026, focusing on safe, efficient, and on-device artificial intelligence.</p>
+    </section>
+
+    <section id="research">
+        <h2 data-i18n="research.title">Research & Models</h2>
+        <div class="cards-grid">
+            <div class="card">
+                <h3 data-i18n="research.card_neo_mod.title">Neo Moderation</h3>
+                <p data-i18n="research.card_neo_mod.purpose">Real-time complex analysis</p>
+                <div class="neo-features" data-i18n="research.card_neo_mod.features">Detects: Hate, Violence, Sexual content, Policy violations</div>
+                
+                <div class="progress-container">
+                    <div class="progress-ring">
+                        <!-- Simple SVG Ring -->
+                        <svg width="24" height="24" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.1)" stroke-width="4" fill="none"/>
+                            <circle cx="12" cy="12" r="10" stroke="#3a7bd5" stroke-width="4" fill="none" stroke-dasharray="62" stroke-dashoffset="50" transform="rotate(-90 12 12)"/>
+                        </svg>
+                    </div>
+                    <span class="progress-text" data-i18n="research.card_neo_mod.progress">20% Complete</span>
+                </div>
+            </div>
+
+            <div class="card card-placeholder">
+                <h3 data-i18n="research.card_future.title">Future Projects</h3>
+                <p data-i18n="research.card_future.desc">More research projects coming soon</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="privacy">
+        <h2 data-i18n="privacy.title">Open & Public Focus</h2>
+        <p data-i18n="privacy.text">Open research. GitHub-based development. No cookies. No tracking. Privacy-first.</p>
+    </section>
+
+    <footer>
+        <div class="footer-links">
+            <a href="https://github.com/Mrowinski-Thorge/Neo.ai" target="_blank">GitHub</a>
+            <a href="#" data-i18n="footer.legal">Legal / Terms</a>
+            <a href="#" data-i18n="footer.privacy">Privacy</a>
+        </div>
+        <p data-i18n="footer.cookies">No cookies used</p>
+        <p data-i18n="footer.hosted">Hosted via GitHub Pages</p>
+    </footer>
+
+</body>
+</html>
