@@ -34,7 +34,7 @@ Simply deploy the root folder to GitHub Pages. The `index.html` will automatical
 ## 🛠️ Technologie
 
 - **Transformers.js v3** - Für das Laden und Ausführen des LLM
-- **Qwen2.5-0.5B-Instruct** - Kompaktes, leistungsfähiges Sprachmodell
+- **LFM2-350M-ONNX** - Kompaktes Liquid-Architektur Sprachmodell mit Qwen2.5-0.5B-Instruct als Fallback
 - **WebGPU** - Native GPU-Beschleunigung im Browser
 
 ## 📁 Projektstruktur
@@ -87,4 +87,4 @@ MIT License
 
 ---
 
-*Powered by [Transformers.js](https://huggingface.co/docs/transformers.js) & [Qwen](https://huggingface.co/Qwen)*
+*Powered by [Transformers.js](https://huggingface.co/docs/transformers.js), [LFM2-350M](https://huggingface.co/onnx-community/LFM2-350M-ONNX) & [Qwen](https://huggingface.co/Qwen)*
