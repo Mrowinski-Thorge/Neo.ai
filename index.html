@@ -286,7 +286,21 @@ function Toggle({ enabled, onChange, label }) {
 // Header
 function Header({ modelStatus, progress, sessions, currentSessionId, onSessionChange, onNewSession }) {
   const [showSessions, setShowSessions] = useState(false);
+  const dropdownRef = useRef(null);
   const currentSession = sessions.find(s => s.id === currentSessionId) || sessions[0];
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowSessions(false);
+      }
+    };
+    if (showSessions) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showSessions]);
 
   return (
     <header className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-surface-100/80 backdrop-blur-md sticky top-0 z-30">
@@ -303,7 +317,7 @@ function Header({ modelStatus, progress, sessions, currentSessionId, onSessionCh
           </p>
         </div>
       </div>
-      <div className="relative">
+      <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setShowSessions(!showSessions)}
           className="flex items-center gap-2 px-3 py-1.5 bg-surface-200 hover:bg-surface-50 rounded-lg transition-colors text-sm text-gray-300"
