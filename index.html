@@ -39,25 +39,75 @@
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; padding: 0; background: #0a0a1a; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
-    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar { width: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #555; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+    /* Animation keyframes */
     .typing-dot { animation: blink 1.4s infinite both; }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes blink { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-    .msg-animate { animation: fadeIn 0.3s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+    .msg-animate { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+    .slide-in { animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
     @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 20px rgba(99,102,241,0.15); } 50% { box-shadow: 0 0 40px rgba(99,102,241,0.3); } }
     .glow-pulse { animation: pulse-glow 2s ease-in-out infinite; }
     @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
     .shimmer-bar { background: linear-gradient(90deg, #1e1e3a 25%, #2a2a4a 50%, #1e1e3a 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
-    .prose-chat p { margin: 0.4em 0; } .prose-chat ul, .prose-chat ol { margin: 0.4em 0; padding-left: 1.5em; }
-    .prose-chat code { background: rgba(255,255,255,0.08); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.88em; }
-    .prose-chat pre { background: rgba(0,0,0,0.4); padding: 0.8em; border-radius: 8px; overflow-x: auto; margin: 0.5em 0; }
+
+    /* Markdown/Prose styling */
+    .prose-chat { line-height: 1.6; }
+    .prose-chat p { margin: 0.5em 0; }
+    .prose-chat p:first-child { margin-top: 0; }
+    .prose-chat p:last-child { margin-bottom: 0; }
+    .prose-chat ul, .prose-chat ol { margin: 0.6em 0; padding-left: 1.5em; }
+    .prose-chat li { margin: 0.3em 0; }
+    .prose-chat code {
+      background: rgba(255,255,255,0.08);
+      padding: 0.2em 0.4em;
+      border-radius: 4px;
+      font-size: 0.88em;
+      font-family: 'Consolas', 'Monaco', monospace;
+    }
+    .prose-chat pre {
+      background: rgba(0,0,0,0.4);
+      padding: 1em;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 0.8em 0;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
     .prose-chat pre code { background: transparent; padding: 0; }
     .prose-chat a { color: #818cf8; text-decoration: underline; }
+    .prose-chat a:hover { color: #a5b4fc; }
+    .prose-chat strong { font-weight: 600; color: #fff; }
+    .prose-chat h1, .prose-chat h2, .prose-chat h3 { margin: 0.8em 0 0.4em; font-weight: 600; color: #fff; }
+
+    /* Bubble message styling */
+    .message-bubble {
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      word-wrap: break-word;
+    }
+    .user-bubble {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: #fff;
+      margin-left: auto;
+      border-bottom-right-radius: 6px;
+    }
+    .ai-bubble {
+      background: rgba(255,255,255,0.04);
+      color: #e5e5e5;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-bottom-left-radius: 6px;
+    }
+
+    /* Toggle styling */
     .toggle-track { transition: background-color 0.2s; }
     .toggle-thumb { transition: transform 0.2s; }
   </style>
@@ -78,8 +128,8 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const STORAGE_KEY   = 'neoai-chat-history';
 const SESSIONS_KEY  = 'neoai-chat-sessions';
 const SETTINGS_KEY  = 'neoai-settings';
-const MODEL_ID      = 'onnx-community/Qwen2.5-0.5B-Instruct';
-const FALLBACK_ID   = 'onnx-community/Llama-3.2-1B-Instruct-q4f16';
+const MODEL_ID      = 'onnx-community/LFM-350M-ONNX';
+const FALLBACK_ID   = 'onnx-community/Qwen2.5-0.5B-Instruct';
 const WIKI_API      = 'https://de.wikipedia.org/w/api.php';
 
 // ─── Worker Source (Blob) ───────────────────────────────────────────────
@@ -126,8 +176,8 @@ async function generate(messages, id) {
 
   try {
     const result = await generator(messages, {
-      max_new_tokens: 512,
-      temperature: 0.7,
+      max_new_tokens: 768,
+      temperature: 0.6,
       top_p: 0.9,
       do_sample: true,
     });
@@ -234,9 +284,58 @@ async function clearModelCache() {
   }
 }
 
+// ─── RAM Management ─────────────────────────────────────────────────────
+function getApproximateMemoryUsage() {
+  if (performance.memory) {
+    return {
+      used: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024),
+      total: Math.round(performance.memory.totalJSHeapSize / 1024 / 1024),
+      limit: Math.round(performance.memory.jsHeapSizeLimit / 1024 / 1024)
+    };
+  }
+  return null;
+}
+
+function isLowMemory() {
+  const mem = getApproximateMemoryUsage();
+  if (!mem) return false;
+  // Consider low memory if using more than 80% of available heap
+  return (mem.used / mem.limit) > 0.8;
+}
+
+// Unload model and force garbage collection
+async function unloadModel(worker) {
+  if (worker) {
+    worker.terminate();
+  }
+  // Force garbage collection if available (Chrome with --enable-precise-memory-info)
+  if (window.gc) {
+    window.gc();
+  }
+  console.log('Model unloaded for memory conservation');
+}
+
 // ─── Wikipedia API ──────────────────────────────────────────────────────
+// Extract keywords from user query for better Wikipedia search
+function extractKeywords(text) {
+  // Remove common German stop words and extract meaningful terms
+  const stopWords = ['der', 'die', 'das', 'ein', 'eine', 'und', 'oder', 'aber', 'in', 'zu', 'von', 'mit', 'für', 'auf', 'ist', 'sind', 'war', 'wird', 'werden', 'hat', 'haben', 'kann', 'kannst', 'soll', 'sollte', 'was', 'wie', 'wer', 'wo', 'wann', 'warum', 'welche', 'welcher', 'welches', 'mir', 'mich', 'dir', 'dich', 'sich', 'uns', 'euch', 'ihnen'];
+
+  // Split text into words and filter
+  const words = text.toLowerCase()
+    .replace(/[^\wäöüß\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !stopWords.includes(w));
+
+  // Return first 3 keywords or original text if no good keywords found
+  return words.length > 0 ? words.slice(0, 3).join(' ') : text;
+}
+
 async function searchWikipedia(query) {
-  const searchUrl = `${WIKI_API}?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=1&format=json&origin=*`;
+  // Extract keywords for better search results
+  const searchTerms = extractKeywords(query);
+
+  const searchUrl = `${WIKI_API}?action=query&list=search&srsearch=${encodeURIComponent(searchTerms)}&srlimit=1&format=json&origin=*`;
   const searchRes = await fetch(searchUrl);
   const searchData = await searchRes.json();
   const results = searchData?.query?.search;
@@ -251,8 +350,8 @@ async function searchWikipedia(query) {
 
   const page = Object.values(pages)[0];
   const extract = page?.extract || '';
-  // Limit context length to ~1500 chars for the small model
-  return { title: page.title, text: extract.slice(0, 1500) };
+  // Increased context length to 2500 chars for LFM-350M (Liquid architecture handles more context)
+  return { title: page.title, text: extract.slice(0, 2500) };
 }
 
 // ─── Markdown Renderer ─────────────────────────────────────────────────
@@ -303,38 +402,47 @@ function Header({ modelStatus, progress, sessions, currentSessionId, onSessionCh
   }, [showSessions]);
 
   return (
-    <header className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-surface-100/80 backdrop-blur-md sticky top-0 z-30">
+    <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-gradient-to-r from-surface-100/90 to-surface-200/90 backdrop-blur-xl sticky top-0 z-30 shadow-lg">
       <div className="flex items-center gap-3 min-w-0">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold shrink-0 ${modelStatus === 'ready' ? 'bg-accent-500/20 text-accent-400' : 'bg-gray-700 text-gray-400'}`}>
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg font-bold shrink-0 transition-all ${modelStatus === 'ready' ? 'bg-gradient-to-br from-accent-500 to-accent-600 text-white shadow-lg shadow-accent-500/30' : 'bg-gray-700/50 text-gray-400'}`}>
           N
         </div>
         <div className="min-w-0">
-          <h1 className="text-sm font-semibold text-white truncate">NeoAI Chat</h1>
-          <p className="text-[10px] text-gray-500 truncate">
-            {modelStatus === 'ready' ? '● Modell bereit – Offline-fähig' :
-             modelStatus === 'loading' ? `⏳ Lade... ${progress > 0 ? progress + '%' : ''}` :
-             modelStatus === 'error' ? '✕ Fehler' : '○ Nicht geladen'}
+          <h1 className="text-sm font-bold text-white truncate tracking-tight">NeoAI Chat</h1>
+          <p className="text-[10px] text-gray-400 truncate flex items-center gap-1">
+            {modelStatus === 'ready' ? (
+              <><span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Modell bereit – Offline-fähig</>
+            ) : modelStatus === 'loading' ? (
+              <><span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Lade... {progress > 0 ? progress + '%' : ''}</>
+            ) : modelStatus === 'error' ? (
+              <><span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400"></span> Fehler</>
+            ) : (
+              <><span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-500"></span> Nicht geladen</>
+            )}
           </p>
         </div>
       </div>
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setShowSessions(!showSessions)}
-          className="flex items-center gap-2 px-3 py-1.5 bg-surface-200 hover:bg-surface-50 rounded-lg transition-colors text-sm text-gray-300"
+          className="flex items-center gap-2 px-3 py-2 bg-surface-200/80 hover:bg-surface-50 rounded-xl transition-all text-sm text-gray-200 font-medium border border-white/5 hover:border-white/10"
         >
-          <span className="truncate max-w-[120px]">{currentSession?.name || 'Chat'}</span>
           <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+          <span className="truncate max-w-[100px]">{currentSession?.name || 'Chat'}</span>
+          <svg className={`w-4 h-4 shrink-0 transition-transform ${showSessions ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
         {showSessions && (
-          <div className="absolute right-0 mt-2 w-56 bg-surface-100 border border-white/10 rounded-lg shadow-xl z-40 max-h-80 overflow-y-auto">
+          <div className="absolute right-0 mt-2 w-64 bg-surface-100/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-40 max-h-80 overflow-y-auto">
             <div className="p-2">
               <button
                 onClick={() => { onNewSession(); setShowSessions(false); }}
-                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-surface-50 rounded text-sm text-accent-400 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-surface-50 rounded-lg text-sm text-accent-400 font-medium transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 Neuer Chat
@@ -345,13 +453,13 @@ function Header({ modelStatus, progress, sessions, currentSessionId, onSessionCh
                 <button
                   key={session.id}
                   onClick={() => { onSessionChange(session.id); setShowSessions(false); }}
-                  className={`w-full flex items-start gap-2 px-3 py-2 hover:bg-surface-50 transition-colors text-left ${session.id === currentSessionId ? 'bg-surface-50' : ''}`}
+                  className={`w-full flex items-start gap-2 px-3 py-2.5 hover:bg-surface-50 transition-colors text-left ${session.id === currentSessionId ? 'bg-surface-50/50 border-l-2 border-accent-500' : ''}`}
                 >
-                  <svg className="w-4 h-4 shrink-0 mt-0.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  <svg className="w-4 h-4 shrink-0 mt-0.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-200 truncate">{session.name}</div>
+                    <div className="text-sm text-gray-100 font-medium truncate">{session.name}</div>
                     <div className="text-[10px] text-gray-500">{session.messages.length} Nachrichten</div>
                   </div>
                 </button>
@@ -370,30 +478,52 @@ function ChatMessage({ msg }) {
   const html = useMemo(() => isUser ? null : renderMarkdown(msg.content), [msg.content, isUser]);
 
   return (
-    <div className={`msg-animate px-4 py-3 ${isUser ? 'bg-chat-user' : 'bg-chat-ai'}`}>
-      <div className="max-w-2xl mx-auto flex gap-3">
-        {/* Avatar */}
-        <div className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center text-xs font-bold mt-0.5 ${isUser ? 'bg-accent-500/30 text-accent-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-          {isUser ? 'Du' : 'AI'}
-        </div>
-        {/* Content */}
-        <div className="min-w-0 flex-1 text-sm text-gray-200 leading-relaxed">
+    <div className={`msg-animate px-4 py-2 ${isUser ? '' : ''}`}>
+      <div className={`max-w-3xl mx-auto flex ${isUser ? 'justify-end' : 'justify-start'} gap-2`}>
+        {/* Avatar for AI only */}
+        {!isUser && (
+          <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-semibold bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg mt-1">
+            AI
+          </div>
+        )}
+
+        <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-[85%]`}>
+          {/* Wiki info badge */}
           {msg.wikiInfo && (
-            <div className="mb-2 text-[11px] text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded inline-block">
-              📖 Wikipedia: {msg.wikiInfo}
+            <div className="mb-1 text-[10px] text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full flex items-center gap-1 slide-in">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
+              </svg>
+              Wikipedia: {msg.wikiInfo}
             </div>
           )}
-          {isUser ? (
-            <p className="whitespace-pre-wrap">{msg.content}</p>
-          ) : (
-            <div className="prose-chat" dangerouslySetInnerHTML={{ __html: html }} />
-          )}
+
+          {/* Message bubble */}
+          <div className={`message-bubble ${isUser ? 'user-bubble' : 'ai-bubble'}`}>
+            {isUser ? (
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+            ) : (
+              <div className="prose-chat text-sm" dangerouslySetInnerHTML={{ __html: html }} />
+            )}
+          </div>
+
+          {/* Warning badge */}
           {msg.warning && (
-            <div className="mt-2 text-[11px] text-amber-400 bg-amber-500/10 px-2 py-1 rounded inline-block">
-              ⚠ {msg.warning}
+            <div className="mt-1 text-[10px] text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+              </svg>
+              {msg.warning}
             </div>
           )}
         </div>
+
+        {/* Avatar for User only */}
+        {isUser && (
+          <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-semibold bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg mt-1">
+            Du
+          </div>
+        )}
       </div>
     </div>
   );
@@ -402,17 +532,22 @@ function ChatMessage({ msg }) {
 // Typing Indicator
 function TypingIndicator({ wikiSearching }) {
   return (
-    <div className="msg-animate px-4 py-3 bg-chat-ai">
-      <div className="max-w-2xl mx-auto flex gap-3">
-        <div className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center text-xs font-bold bg-emerald-500/20 text-emerald-400">AI</div>
-        <div className="flex flex-col gap-2">
+    <div className="msg-animate px-4 py-2">
+      <div className="max-w-3xl mx-auto flex justify-start gap-2">
+        <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-semibold bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg mt-1">
+          AI
+        </div>
+        <div className="flex flex-col items-start gap-2">
           {wikiSearching && (
-            <span className="text-[11px] text-indigo-400 flex items-center gap-1">
-              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+            <div className="text-[10px] text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+              </svg>
               Suche auf Wikipedia...
-            </span>
+            </div>
           )}
-          <div className="flex gap-1.5 items-center h-5">
+          <div className="message-bubble ai-bubble flex gap-1.5 items-center h-6 px-4">
             <div className="typing-dot w-2 h-2 bg-gray-400 rounded-full" />
             <div className="typing-dot w-2 h-2 bg-gray-400 rounded-full" />
             <div className="typing-dot w-2 h-2 bg-gray-400 rounded-full" />
@@ -427,45 +562,60 @@ function TypingIndicator({ wikiSearching }) {
 function WelcomeScreen({ modelStatus, onLoadModel }) {
   return (
     <div className="flex-1 flex items-center justify-center p-6">
-      <div className="text-center max-w-sm">
-        <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-accent-500/10 flex items-center justify-center glow-pulse">
-          <span className="text-3xl font-bold text-accent-400">N</span>
+      <div className="text-center max-w-md">
+        <div className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-accent-500 to-accent-600 flex items-center justify-center glow-pulse shadow-2xl shadow-accent-500/30">
+          <span className="text-4xl font-bold text-white">N</span>
         </div>
-        <h2 className="text-xl font-semibold text-white mb-2">Willkommen bei NeoAI</h2>
-        <p className="text-sm text-gray-400 mb-6 leading-relaxed">
-          Deine private KI, die direkt in deinem Browser läuft. Keine Cloud, keine Daten werden gesendet.
+        <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">Willkommen bei NeoAI</h2>
+        <p className="text-sm text-gray-400 mb-8 leading-relaxed">
+          Deine private KI mit LFM-350M Liquid-Architektur, die direkt in deinem Browser läuft.
+          Keine Cloud, keine Daten werden gesendet.
         </p>
         {modelStatus === 'idle' && (
           <button
             onClick={onLoadModel}
-            className="px-5 py-2.5 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors"
+            className="px-6 py-3 bg-gradient-to-r from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-accent-500/30 hover:shadow-xl hover:shadow-accent-500/40"
           >
             Modell laden &amp; starten
           </button>
         )}
         {modelStatus === 'loading' && (
-          <div className="space-y-2">
-            <div className="h-2 w-48 mx-auto rounded-full overflow-hidden bg-gray-700">
+          <div className="space-y-3">
+            <div className="h-2.5 w-64 mx-auto rounded-full overflow-hidden bg-gray-700/50 border border-white/5">
               <div className="shimmer-bar h-full rounded-full" />
             </div>
-            <p className="text-xs text-gray-500">Modell wird heruntergeladen...</p>
+            <p className="text-xs text-gray-400">Modell wird heruntergeladen...</p>
           </div>
         )}
         {modelStatus === 'ready' && (
-          <p className="text-sm text-emerald-400">✓ Bereit — schreib deine erste Nachricht!</p>
+          <p className="text-sm text-emerald-400 flex items-center justify-center gap-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Bereit — schreib deine erste Nachricht!
+          </p>
         )}
         {modelStatus === 'error' && (
           <div>
-            <p className="text-sm text-red-400 mb-3">WebGPU wird nicht unterstützt oder das Modell konnte nicht geladen werden.</p>
-            <button onClick={onLoadModel} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors">
+            <p className="text-sm text-red-400 mb-4">WebGPU wird nicht unterstützt oder das Modell konnte nicht geladen werden.</p>
+            <button
+              onClick={onLoadModel}
+              className="px-5 py-2.5 bg-gray-700/80 hover:bg-gray-600/80 text-white text-sm font-medium rounded-xl transition-all border border-white/10"
+            >
               Erneut versuchen
             </button>
           </div>
         )}
-        <div className="mt-8 grid grid-cols-1 gap-2 text-left">
-          {['🔒 100% lokal – Keine Daten verlassen deinen Browser', '⚡ WebGPU-beschleunigt', '📖 Optional: Wikipedia-Wissen (RAG)', '💾 Chat wird automatisch gespeichert'].map((t, i) => (
-            <div key={i} className="text-xs text-gray-500 flex items-start gap-2">
-              <span>{t}</span>
+        <div className="mt-10 grid grid-cols-1 gap-3 text-left">
+          {[
+            { icon: '🔒', text: '100% lokal – Keine Daten verlassen deinen Browser' },
+            { icon: '⚡', text: 'WebGPU-beschleunigt mit Liquid-Architektur' },
+            { icon: '📖', text: 'Optional: Wikipedia-Wissen (RAG)' },
+            { icon: '💾', text: 'Chat wird automatisch gespeichert' }
+          ].map((item, i) => (
+            <div key={i} className="flex items-center gap-3 text-xs text-gray-400 bg-white/5 px-4 py-2.5 rounded-xl border border-white/5">
+              <span className="text-lg">{item.icon}</span>
+              <span>{item.text}</span>
             </div>
           ))}
         </div>
@@ -478,12 +628,15 @@ function WelcomeScreen({ modelStatus, onLoadModel }) {
 function ProgressBar({ progress }) {
   if (progress <= 0) return null;
   return (
-    <div className="px-4 py-1 bg-surface-200/80">
-      <div className="max-w-2xl mx-auto">
-        <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
-          <div className="h-full bg-accent-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+    <div className="px-4 py-2 bg-surface-200/80 border-b border-white/5">
+      <div className="max-w-3xl mx-auto">
+        <div className="h-1.5 bg-gray-700/50 rounded-full overflow-hidden border border-white/5">
+          <div className="h-full bg-gradient-to-r from-accent-500 to-accent-600 rounded-full transition-all duration-300 shadow-lg" style={{ width: `${progress}%` }} />
         </div>
-        <p className="text-[10px] text-gray-500 mt-1">Modell laden: {progress}%</p>
+        <p className="text-[10px] text-gray-400 mt-1.5 flex items-center justify-between">
+          <span>Modell laden...</span>
+          <span className="font-semibold text-accent-400">{progress}%</span>
+        </p>
       </div>
     </div>
   );
@@ -519,8 +672,8 @@ function InputBar({ onSend, disabled, wikiEnabled, setWikiEnabled }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-white/5 bg-surface-100/80 backdrop-blur-md px-4 py-3">
-      <div className="max-w-2xl mx-auto">
+    <form onSubmit={handleSubmit} className="border-t border-white/10 bg-gradient-to-r from-surface-100/90 to-surface-200/90 backdrop-blur-xl px-4 py-3 shadow-lg">
+      <div className="max-w-3xl mx-auto">
         <div className="flex gap-2 items-end">
           <textarea
             ref={textareaRef}
@@ -530,12 +683,12 @@ function InputBar({ onSend, disabled, wikiEnabled, setWikiEnabled }) {
             placeholder={disabled ? 'Modell wird geladen...' : 'Nachricht eingeben...'}
             disabled={disabled}
             rows={1}
-            className="flex-1 bg-surface-200 text-sm text-white placeholder-gray-500 rounded-xl px-4 py-2.5 resize-none outline-none focus:ring-1 focus:ring-accent-500/50 border border-white/5 disabled:opacity-40"
+            className="flex-1 bg-surface-200/80 text-sm text-white placeholder-gray-500 rounded-2xl px-5 py-3 resize-none outline-none focus:ring-2 focus:ring-accent-500/50 border border-white/10 disabled:opacity-40 transition-all"
           />
           <button
             type="button"
             onClick={() => setWikiEnabled(!wikiEnabled)}
-            className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${wikiEnabled ? 'bg-accent-500/20 text-accent-400 hover:bg-accent-500/30' : 'bg-surface-200 text-gray-500 hover:bg-surface-50'}`}
+            className={`shrink-0 w-11 h-11 flex items-center justify-center rounded-xl transition-all ${wikiEnabled ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-surface-200/80 text-gray-400 hover:bg-surface-50 border border-white/10'}`}
             title="Wikipedia Recherche"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -545,18 +698,19 @@ function InputBar({ onSend, disabled, wikiEnabled, setWikiEnabled }) {
           <button
             type="submit"
             disabled={disabled || !text.trim()}
-            className="shrink-0 w-10 h-10 flex items-center justify-center bg-accent-500 hover:bg-accent-600 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl transition-colors"
+            className="shrink-0 w-11 h-11 flex items-center justify-center bg-gradient-to-br from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-white rounded-xl transition-all shadow-lg disabled:shadow-none"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
         </div>
-        <div className="flex items-center justify-between mt-1.5">
-          <p className="text-[10px] text-gray-600">
+        <div className="flex items-center justify-between mt-2 px-1">
+          <p className="text-[10px] text-gray-500">
             NeoAI kann Fehler machen. Kompaktes lokales Modell.
           </p>
           {wikiEnabled && (
-            <p className="text-[10px] text-indigo-400">
-              📖 Wikipedia aktiv
+            <p className="text-[10px] text-indigo-400 flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+              Wikipedia aktiv
             </p>
           )}
         </div>
@@ -586,6 +740,64 @@ function App() {
 
   // Persist settings
   useEffect(() => { saveSettings({ wikiEnabled }); }, [wikiEnabled]);
+
+  // RAM management: Cleanup on tab close/hide and inactivity
+  useEffect(() => {
+    let inactivityTimer = null;
+
+    // Cleanup on page unload (tab close)
+    const handleUnload = () => {
+      if (workerRef.current) {
+        unloadModel(workerRef.current);
+        workerRef.current = null;
+      }
+    };
+
+    // Cleanup on page visibility change (tab switch/hide)
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Check memory status when tab is hidden
+        if (isLowMemory()) {
+          console.log('Low memory detected, unloading model');
+          if (workerRef.current) {
+            unloadModel(workerRef.current);
+            workerRef.current = null;
+            setModelStatus('idle');
+          }
+        }
+      }
+    };
+
+    // Cleanup after 10 minutes of inactivity
+    const resetInactivityTimer = () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        if (workerRef.current && !isGenerating) {
+          console.log('Unloading model due to inactivity');
+          unloadModel(workerRef.current);
+          workerRef.current = null;
+          setModelStatus('idle');
+        }
+      }, 600000); // 10 minutes
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('mousedown', resetInactivityTimer);
+    document.addEventListener('keydown', resetInactivityTimer);
+    document.addEventListener('touchstart', resetInactivityTimer);
+
+    resetInactivityTimer();
+
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('mousedown', resetInactivityTimer);
+      document.removeEventListener('keydown', resetInactivityTimer);
+      document.removeEventListener('touchstart', resetInactivityTimer);
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+    };
+  }, [isGenerating]);
 
   // Auto-scroll
   useEffect(() => {
@@ -695,9 +907,9 @@ function App() {
       ? `Du bist NeoAI, ein hilfreicher KI-Assistent. Nutze folgenden Kontext von Wikipedia, um die Frage zu beantworten. Antworte auf Deutsch.\n\n--- Wikipedia: ${wikiTitle} ---\n${wikiContext}\n--- Ende Kontext ---`
       : 'Du bist NeoAI, ein hilfreicher KI-Assistent. Antworte klar, präzise und auf Deutsch.';
 
-    // Take last 6 messages for context window
+    // Take last 10 messages for context window (Liquid architecture handles more context)
     const currentMessages = [...messages, userMsg];
-    const recentMsgs = currentMessages.slice(-6);
+    const recentMsgs = currentMessages.slice(-10);
     const chatMessages = [
       { role: 'system', content: systemPrompt },
       ...recentMsgs.map(m => ({ role: m.role, content: m.content }))
@@ -821,10 +1033,10 @@ function App() {
 
       {/* Clear button when messages exist */}
       {hasMessages && (
-        <div className="flex justify-center py-1 bg-surface-300">
+        <div className="flex justify-center py-2 bg-surface-300 border-t border-white/5">
           <button
             onClick={clearChat}
-            className="text-[11px] text-gray-600 hover:text-gray-400 transition-colors px-3 py-1"
+            className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors px-4 py-1.5 rounded-lg hover:bg-white/5"
           >
             Chat löschen
           </button>
