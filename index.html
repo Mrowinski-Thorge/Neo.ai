@@ -1,312 +1,637 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <title>Neo AI Labs</title>
-    <script>
-        var lang = navigator.language || navigator.userLanguage; 
-        if (lang.startsWith('en')) {
-             window.location.replace("en/");
-        } else {
-             window.location.replace("de/");
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>NeoAI Chat • Lokale KI</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            surface: { 50: '#1a1a2e', 100: '#16162a', 200: '#0f0f23', 300: '#0a0a1a' },
+            accent: { 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5' },
+            chat: { user: '#1e1e3a', ai: '#12122a' }
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
         }
-    </script>
+      }
+    };
+  </script>
+
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- React 18 -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Marked.js for Markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background: #0a0a1a; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #555; }
+    .typing-dot { animation: blink 1.4s infinite both; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .msg-animate { animation: fadeIn 0.3s ease-out; }
+    @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 20px rgba(99,102,241,0.15); } 50% { box-shadow: 0 0 40px rgba(99,102,241,0.3); } }
+    .glow-pulse { animation: pulse-glow 2s ease-in-out infinite; }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    .shimmer-bar { background: linear-gradient(90deg, #1e1e3a 25%, #2a2a4a 50%, #1e1e3a 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+    .prose-chat p { margin: 0.4em 0; } .prose-chat ul, .prose-chat ol { margin: 0.4em 0; padding-left: 1.5em; }
+    .prose-chat code { background: rgba(255,255,255,0.08); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.88em; }
+    .prose-chat pre { background: rgba(0,0,0,0.4); padding: 0.8em; border-radius: 8px; overflow-x: auto; margin: 0.5em 0; }
+    .prose-chat pre code { background: transparent; padding: 0; }
+    .prose-chat a { color: #818cf8; text-decoration: underline; }
+    .toggle-track { transition: background-color 0.2s; }
+    .toggle-thumb { transition: transform 0.2s; }
+  </style>
 </head>
-<body>
-<!--
-Old content below
--->
-<div style="display:none">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NeoAI • Private Local AI</title>
-    
-    <!-- Preconnect for performance -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- Stylesheets -->
-    <link rel="stylesheet" href="css/main.css">
-</head>
-<body>
-    <!-- Ambient Background Effects -->
-    <div class="ambient ambient-glow ambient-glow--blue"></div>
-    <div class="ambient ambient-glow ambient-glow--purple"></div>
+<body class="dark">
 
-    <!-- ============================================
-         SCREEN 1: ONBOARDING
-         Erste Ansicht für neue Benutzer
-         ============================================ -->
-    <section id="onboarding" class="screen active">
-        <div class="container text-center">
-            <!-- Logo/Icon -->
-            <div class="icon-box animate-float">
-                <i data-lucide="sparkles"></i>
-            </div>
+<div id="root"></div>
 
-            <!-- Headline -->
-            <h1 class="animate-fade-in">NeoAI</h1>
-            <p class="animate-fade-in animate-delay-1" style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-muted);">
-                Powered by Qwen 2.5
-            </p>
-            
-            <div class="spacer-lg"></div>
+<script type="text/babel" data-type="module">
+/* ======================================================================
+   NeoAI Chat – Single-File React App
+   Lokale KI via WebGPU · Wikipedia RAG · Offline-First
+   ====================================================================== */
 
-            <!-- Description -->
-            <p class="animate-fade-in animate-delay-2" style="max-width: 380px; margin: 0 auto;">
-                Echte KI, die vollständig auf deinem Gerät läuft. 
-                Keine Cloud. Keine Kosten. Deine Daten bleiben privat.
-            </p>
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-            <div class="spacer-xl"></div>
+// ─── Constants ──────────────────────────────────────────────────────────
+const STORAGE_KEY   = 'neoai-chat-history';
+const SETTINGS_KEY  = 'neoai-settings';
+const MODEL_ID      = 'onnx-community/Qwen2.5-0.5B-Instruct';
+const FALLBACK_ID   = 'onnx-community/Llama-3.2-1B-Instruct-q4f16';
+const WIKI_API      = 'https://de.wikipedia.org/w/api.php';
 
-            <!-- Feature Cards -->
-            <div class="features animate-fade-in animate-delay-3">
-                <div class="feature-card">
-                    <i data-lucide="wifi-off"></i>
-                    <h4>100% Offline</h4>
-                    <p>Funktioniert ohne Internet</p>
-                </div>
-                <div class="feature-card">
-                    <i data-lucide="shield-check"></i>
-                    <h4>Privat</h4>
-                    <p>Keine Datenübertragung</p>
-                </div>
-                <div class="feature-card">
-                    <i data-lucide="cpu"></i>
-                    <h4>WebGPU</h4>
-                    <p>Hardware-beschleunigt</p>
-                </div>
-                <div class="feature-card">
-                    <i data-lucide="database"></i>
-                    <h4>Lokal</h4>
-                    <p>Gespeichert im Browser</p>
-                </div>
-            </div>
+// ─── Worker Source (Blob) ───────────────────────────────────────────────
+const workerCode = `
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.4.1';
 
-            <div class="spacer-2xl"></div>
+env.allowLocalModels = false;
 
-            <!-- CTA Button -->
-            <button id="onboarding-continue" class="btn btn--primary">
-                Weiter
-                <i data-lucide="arrow-right"></i>
-            </button>
+let generator = null;
+let currentModelId = null;
 
-            <div class="spacer-md"></div>
-            <p class="text-muted" style="font-size: 0.75rem;">
-                Im nächsten Schritt wird das KI-Modell geladen (~1GB)
-            </p>
+async function loadModel(modelId) {
+  if (generator && currentModelId === modelId) return;
+  self.postMessage({ type: 'status', message: 'Lade Modell: ' + modelId + '...', stage: 'loading' });
+
+  try {
+    generator = await pipeline('text-generation', modelId, {
+      device: 'webgpu',
+      dtype: 'q4',
+      progress_callback: (p) => {
+        if (p.status === 'progress' && p.progress != null) {
+          self.postMessage({ type: 'progress', progress: Math.round(p.progress), file: p.file || '' });
+        } else if (p.status === 'done') {
+          self.postMessage({ type: 'status', message: 'Modell-Datei geladen', stage: 'loaded_file' });
+        }
+      }
+    });
+    currentModelId = modelId;
+    self.postMessage({ type: 'status', message: 'Modell bereit!', stage: 'ready' });
+  } catch (err) {
+    self.postMessage({ type: 'error', message: 'Fehler beim Laden: ' + err.message });
+    throw err;
+  }
+}
+
+async function generate(messages, id) {
+  if (!generator) {
+    self.postMessage({ type: 'error', message: 'Kein Modell geladen.', id });
+    return;
+  }
+
+  try {
+    const result = await generator(messages, {
+      max_new_tokens: 512,
+      temperature: 0.7,
+      top_p: 0.9,
+      do_sample: true,
+    });
+
+    const output = result[0]?.generated_text;
+    let answer = '';
+    if (Array.isArray(output)) {
+      const last = output[output.length - 1];
+      answer = last?.content || '';
+    } else if (typeof output === 'string') {
+      const fullPrompt = messages.map(m => m.content).join('');
+      answer = output.slice(fullPrompt.length).trim();
+    }
+
+    self.postMessage({ type: 'result', text: answer, id });
+  } catch (err) {
+    self.postMessage({ type: 'error', message: 'Generierung fehlgeschlagen: ' + err.message, id });
+  }
+}
+
+self.onmessage = async (e) => {
+  const { type, modelId, messages, id } = e.data;
+  if (type === 'load') {
+    try { await loadModel(modelId); } catch(_) {}
+  } else if (type === 'generate') {
+    if (!generator) await loadModel(modelId || '${MODEL_ID}');
+    await generate(messages, id);
+  }
+};
+`;
+
+function createWorker() {
+  const blob = new Blob([workerCode], { type: 'application/javascript' });
+  const url = URL.createObjectURL(blob);
+  return new Worker(url, { type: 'module' });
+}
+
+// ─── localStorage Helpers ───────────────────────────────────────────────
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function saveHistory(msgs) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs)); } catch {}
+}
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+function saveSettings(s) {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
+}
+
+// ─── Wikipedia API ──────────────────────────────────────────────────────
+async function searchWikipedia(query) {
+  const searchUrl = `${WIKI_API}?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=1&format=json&origin=*`;
+  const searchRes = await fetch(searchUrl);
+  const searchData = await searchRes.json();
+  const results = searchData?.query?.search;
+  if (!results || results.length === 0) return null;
+
+  const title = results[0].title;
+  const extUrl = `${WIKI_API}?action=query&titles=${encodeURIComponent(title)}&prop=extracts&exintro=true&explaintext=true&format=json&origin=*`;
+  const extRes = await fetch(extUrl);
+  const extData = await extRes.json();
+  const pages = extData?.query?.pages;
+  if (!pages) return null;
+
+  const page = Object.values(pages)[0];
+  const extract = page?.extract || '';
+  // Limit context length to ~1500 chars for the small model
+  return { title: page.title, text: extract.slice(0, 1500) };
+}
+
+// ─── Markdown Renderer ─────────────────────────────────────────────────
+function renderMarkdown(text) {
+  if (!text) return '';
+  try {
+    return marked.parse(text, { breaks: true, gfm: true });
+  } catch {
+    return text.replace(/\n/g, '<br/>');
+  }
+}
+
+// ─── Components ─────────────────────────────────────────────────────────
+
+// Toggle Switch
+function Toggle({ enabled, onChange, label }) {
+  return (
+    <button
+      onClick={() => onChange(!enabled)}
+      className="flex items-center gap-2 text-sm select-none"
+      aria-label={label}
+    >
+      <div className={`toggle-track relative w-10 h-5 rounded-full ${enabled ? 'bg-accent-500' : 'bg-gray-600'}`}>
+        <div className={`toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow ${enabled ? 'transform translate-x-5' : ''}`} />
+      </div>
+      <span className="text-gray-300 text-xs sm:text-sm whitespace-nowrap">{label}</span>
+    </button>
+  );
+}
+
+// Header
+function Header({ wikiEnabled, setWikiEnabled, modelStatus, progress }) {
+  return (
+    <header className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-surface-100/80 backdrop-blur-md sticky top-0 z-30">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold shrink-0 ${modelStatus === 'ready' ? 'bg-accent-500/20 text-accent-400' : 'bg-gray-700 text-gray-400'}`}>
+          N
         </div>
-    </section>
-
-    <!-- ============================================
-         SCREEN 2: MODEL LOADER
-         Download & Initialisierung des Modells
-         ============================================ -->
-    <section id="model-loader" class="screen">
-        <div class="container text-center">
-            <!-- Icon -->
-            <div class="icon-box">
-                <i data-lucide="download-cloud"></i>
-            </div>
-
-            <h2>Modell wird vorbereitet</h2>
-            
-            <div class="spacer-sm"></div>
-            
-            <p style="max-width: 320px; margin: 0 auto;">
-                Dies geschieht nur einmal. Das Modell wird lokal gespeichert.
-            </p>
-
-            <div class="spacer-xl"></div>
-
-            <!-- Progress Bar -->
-            <div class="progress-container">
-                <div class="progress-header">
-                    <span id="progress-status">Initialisiere...</span>
-                    <span id="progress-percent" class="progress-percent">0%</span>
-                </div>
-                <div class="progress-bar">
-                    <div id="progress-fill" class="progress-fill"></div>
-                </div>
-                <p id="progress-detail" class="progress-detail">Verbindung wird hergestellt...</p>
-            </div>
-
-            <div class="spacer-2xl"></div>
-
-            <!-- Cancel Button -->
-            <button id="cancel-load" class="btn btn--secondary">
-                Abbrechen
-            </button>
+        <div className="min-w-0">
+          <h1 className="text-sm font-semibold text-white truncate">NeoAI Chat</h1>
+          <p className="text-[10px] text-gray-500 truncate">
+            {modelStatus === 'ready' ? '● Modell bereit – Offline-fähig' :
+             modelStatus === 'loading' ? `⏳ Lade... ${progress > 0 ? progress + '%' : ''}` :
+             modelStatus === 'error' ? '✕ Fehler' : '○ Nicht geladen'}
+          </p>
         </div>
-    </section>
+      </div>
+      <Toggle enabled={wikiEnabled} onChange={setWikiEnabled} label="Wikipedia" />
+    </header>
+  );
+}
 
-    <!-- ============================================
-         SCREEN 3: HOME (Chat Interface)
-         Hauptbildschirm nach dem Laden
-         ============================================ -->
-    <section id="home" class="screen chat-screen">
-        <!-- Chat Header -->
-        <header class="chat-header">
-            <div class="chat-header__left">
-                <h1 class="chat-header__title">NeoAI</h1>
-                <span class="chat-header__status" id="model-status">
-                    <span class="status-dot"></span>
-                    Bereit
-                </span>
-            </div>
-            <button id="open-settings" class="btn btn--icon btn--secondary" aria-label="Einstellungen">
-                <i data-lucide="settings"></i>
-            </button>
-        </header>
+// Single Chat Message
+function ChatMessage({ msg }) {
+  const isUser = msg.role === 'user';
+  const html = useMemo(() => isUser ? null : renderMarkdown(msg.content), [msg.content, isUser]);
 
-        <!-- Chat Messages Area -->
-        <main class="chat-messages" id="chat-messages">
-            <!-- Welcome State (shown when no messages) -->
-            <div class="chat-welcome" id="chat-welcome">
-                <div class="icon-box icon-box--small">
-                    <i data-lucide="sparkles"></i>
-                </div>
-                <h2>Hallo!</h2>
-                <p>Ich bin NeoAI, dein privater KI-Assistent. Stelle mir eine Frage.</p>
-            </div>
-            <!-- Messages will be inserted here -->
-        </main>
-
-        <!-- Chat Input Area -->
-        <footer class="chat-input-area">
-            <form id="chat-form" class="chat-form">
-                <div class="chat-input-wrapper">
-                    <textarea 
-                        id="chat-input" 
-                        class="chat-input" 
-                        placeholder="Nachricht eingeben..." 
-                        rows="1"
-                        autocomplete="off"
-                    ></textarea>
-                    <button type="submit" id="send-btn" class="btn btn--send" disabled aria-label="Senden">
-                        <i data-lucide="arrow-up"></i>
-                    </button>
-                </div>
-            </form>
-            <p class="chat-disclaimer">NeoAI läuft lokal auf deinem Gerät. Keine Daten werden übertragen.</p>
-        </footer>
-    </section>
-
-    <!-- ============================================
-         SETTINGS DIALOG
-         Modal für Einstellungen
-         ============================================ -->
-    <dialog id="settings-dialog" class="glass" style="
-        position: fixed;
-        max-width: 400px;
-        width: calc(100% - 2rem);
-        padding: 0;
-        border: 1px solid var(--bg-glass-border);
-        border-radius: var(--radius-xl);
-        color: var(--text-primary);
-    ">
-        <div style="padding: var(--space-lg); border-bottom: 1px solid var(--bg-glass-border); display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="font-size: 1rem;">Einstellungen</h3>
-            <button id="close-settings" class="btn btn--icon btn--secondary">
-                <i data-lucide="x" style="width: 18px; height: 18px;"></i>
-            </button>
+  return (
+    <div className={`msg-animate px-4 py-3 ${isUser ? 'bg-chat-user' : 'bg-chat-ai'}`}>
+      <div className="max-w-2xl mx-auto flex gap-3">
+        {/* Avatar */}
+        <div className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center text-xs font-bold mt-0.5 ${isUser ? 'bg-accent-500/30 text-accent-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+          {isUser ? 'Du' : 'AI'}
         </div>
-        
-        <div style="padding: var(--space-lg);">
-            <p class="text-muted" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-md);">
-                Daten & Speicher
-            </p>
-            
-            <!-- Clear Chats -->
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--space-md); background: rgba(255,255,255,0.03); border-radius: var(--radius-md); margin-bottom: var(--space-sm);">
-                <div>
-                    <p style="font-size: 0.875rem; font-weight: 500;">Chat Verlauf</p>
-                    <p style="font-size: 0.75rem; color: var(--text-muted);">Alle Nachrichten löschen</p>
-                </div>
-                <button id="btn-clear-chats" class="btn btn--icon btn--secondary" style="color: #ef4444;">
-                    <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
-                </button>
+        {/* Content */}
+        <div className="min-w-0 flex-1 text-sm text-gray-200 leading-relaxed">
+          {msg.wikiInfo && (
+            <div className="mb-2 text-[11px] text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded inline-block">
+              📖 Wikipedia: {msg.wikiInfo}
             </div>
-
-            <!-- Clear Model Cache -->
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--space-md); background: rgba(255,255,255,0.03); border-radius: var(--radius-md);">
-                <div>
-                    <p style="font-size: 0.875rem; font-weight: 500;">Modell Cache</p>
-                    <p style="font-size: 0.75rem; color: var(--text-muted);">~1GB Speicher freigeben</p>
-                </div>
-                <button id="btn-clear-cache" class="btn btn--icon btn--secondary" style="color: #ef4444;">
-                    <i data-lucide="database" style="width: 16px; height: 16px;"></i>
-                </button>
+          )}
+          {isUser ? (
+            <p className="whitespace-pre-wrap">{msg.content}</p>
+          ) : (
+            <div className="prose-chat" dangerouslySetInnerHTML={{ __html: html }} />
+          )}
+          {msg.warning && (
+            <div className="mt-2 text-[11px] text-amber-400 bg-amber-500/10 px-2 py-1 rounded inline-block">
+              ⚠ {msg.warning}
             </div>
-
-            <div class="spacer-lg"></div>
-            
-            <p class="text-muted text-center" style="font-size: 0.625rem;">
-                NeoAI v2.0 • Qwen2.5-0.5B • WebGPU
-            </p>
+          )}
         </div>
-    </dialog>
+      </div>
+    </div>
+  );
+}
 
-    <!-- JavaScript -->
-    <script src="js/app.js"></script>
+// Typing Indicator
+function TypingIndicator({ wikiSearching }) {
+  return (
+    <div className="msg-animate px-4 py-3 bg-chat-ai">
+      <div className="max-w-2xl mx-auto flex gap-3">
+        <div className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center text-xs font-bold bg-emerald-500/20 text-emerald-400">AI</div>
+        <div className="flex flex-col gap-2">
+          {wikiSearching && (
+            <span className="text-[11px] text-indigo-400 flex items-center gap-1">
+              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+              Suche auf Wikipedia...
+            </span>
+          )}
+          <div className="flex gap-1.5 items-center h-5">
+            <div className="typing-dot w-2 h-2 bg-gray-400 rounded-full" />
+            <div className="typing-dot w-2 h-2 bg-gray-400 rounded-full" />
+            <div className="typing-dot w-2 h-2 bg-gray-400 rounded-full" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-    <!-- Initialize Icons after DOM load -->
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
+// Welcome Screen
+function WelcomeScreen({ modelStatus, onLoadModel }) {
+  return (
+    <div className="flex-1 flex items-center justify-center p-6">
+      <div className="text-center max-w-sm">
+        <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-accent-500/10 flex items-center justify-center glow-pulse">
+          <span className="text-3xl font-bold text-accent-400">N</span>
+        </div>
+        <h2 className="text-xl font-semibold text-white mb-2">Willkommen bei NeoAI</h2>
+        <p className="text-sm text-gray-400 mb-6 leading-relaxed">
+          Deine private KI, die direkt in deinem Browser läuft. Keine Cloud, keine Daten werden gesendet.
+        </p>
+        {modelStatus === 'idle' && (
+          <button
+            onClick={onLoadModel}
+            className="px-5 py-2.5 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Modell laden &amp; starten
+          </button>
+        )}
+        {modelStatus === 'loading' && (
+          <div className="space-y-2">
+            <div className="h-2 w-48 mx-auto rounded-full overflow-hidden bg-gray-700">
+              <div className="shimmer-bar h-full rounded-full" />
+            </div>
+            <p className="text-xs text-gray-500">Modell wird heruntergeladen...</p>
+          </div>
+        )}
+        {modelStatus === 'ready' && (
+          <p className="text-sm text-emerald-400">✓ Bereit — schreib deine erste Nachricht!</p>
+        )}
+        {modelStatus === 'error' && (
+          <div>
+            <p className="text-sm text-red-400 mb-3">WebGPU wird nicht unterstützt oder das Modell konnte nicht geladen werden.</p>
+            <button onClick={onLoadModel} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors">
+              Erneut versuchen
+            </button>
+          </div>
+        )}
+        <div className="mt-8 grid grid-cols-1 gap-2 text-left">
+          {['🔒 100% lokal – Keine Daten verlassen deinen Browser', '⚡ WebGPU-beschleunigt', '📖 Optional: Wikipedia-Wissen (RAG)', '💾 Chat wird automatisch gespeichert'].map((t, i) => (
+            <div key={i} className="text-xs text-gray-500 flex items-start gap-2">
+              <span>{t}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-            // Settings Dialog Logic
-            const settingsDialog = document.getElementById('settings-dialog');
-            const openSettingsBtn = document.getElementById('open-settings');
-            const closeSettingsBtn = document.getElementById('close-settings');
-            const resetAppBtn = document.getElementById('reset-app');
-            const clearChatsBtn = document.getElementById('btn-clear-chats');
-            const clearCacheBtn = document.getElementById('btn-clear-cache');
+// Progress Bar
+function ProgressBar({ progress }) {
+  if (progress <= 0) return null;
+  return (
+    <div className="px-4 py-1 bg-surface-200/80">
+      <div className="max-w-2xl mx-auto">
+        <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+          <div className="h-full bg-accent-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+        </div>
+        <p className="text-[10px] text-gray-500 mt-1">Modell laden: {progress}%</p>
+      </div>
+    </div>
+  );
+}
 
-            if (openSettingsBtn) {
-                openSettingsBtn.addEventListener('click', () => settingsDialog.showModal());
-            }
-            if (closeSettingsBtn) {
-                closeSettingsBtn.addEventListener('click', () => settingsDialog.close());
-            }
-            if (resetAppBtn) {
-                resetAppBtn.addEventListener('click', () => {
-                    if (confirm('App zurücksetzen? Du siehst wieder das Onboarding.')) {
-                        NeoAI.resetOnboarding();
-                    }
-                });
-            }
-            if (clearChatsBtn) {
-                clearChatsBtn.addEventListener('click', () => {
-                    if (confirm('Alle Chats löschen?')) {
-                        NeoAI.clearAllChats();
-                        alert('Chats gelöscht.');
-                    }
-                });
-            }
-            if (clearCacheBtn) {
-                clearCacheBtn.addEventListener('click', async () => {
-                    if (confirm('Modell-Cache löschen? Das Modell muss erneut geladen werden.')) {
-                        await NeoAI.clearModelCache();
-                        location.reload();
-                    }
-                });
-            }
+// Input Bar
+function InputBar({ onSend, disabled }) {
+  const [text, setText] = useState('');
+  const textareaRef = useRef(null);
 
-            // Close dialog on backdrop click
-            settingsDialog.addEventListener('click', (e) => {
-                if (e.target === settingsDialog) {
-                    settingsDialog.close();
-                }
-            });
-        });
-    </script>
-</div>
+  const handleSubmit = (e) => {
+    e?.preventDefault();
+    const trimmed = text.trim();
+    if (!trimmed || disabled) return;
+    onSend(trimmed);
+    setText('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  const handleInput = (e) => {
+    setText(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="border-t border-white/5 bg-surface-100/80 backdrop-blur-md px-4 py-3">
+      <div className="max-w-2xl mx-auto flex gap-2 items-end">
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={handleInput}
+          onKeyDown={handleKeyDown}
+          placeholder={disabled ? 'Modell wird geladen...' : 'Nachricht eingeben...'}
+          disabled={disabled}
+          rows={1}
+          className="flex-1 bg-surface-200 text-sm text-white placeholder-gray-500 rounded-xl px-4 py-2.5 resize-none outline-none focus:ring-1 focus:ring-accent-500/50 border border-white/5 disabled:opacity-40"
+        />
+        <button
+          type="submit"
+          disabled={disabled || !text.trim()}
+          className="shrink-0 w-10 h-10 flex items-center justify-center bg-accent-500 hover:bg-accent-600 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl transition-colors"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <p className="text-[10px] text-gray-600 text-center mt-1.5 max-w-2xl mx-auto">
+        NeoAI kann Fehler machen. Kompaktes lokales Modell — Für komplexe Antworten Wikipedia aktivieren.
+      </p>
+    </form>
+  );
+}
+
+// ─── Main App ───────────────────────────────────────────────────────────
+function App() {
+  const [messages, setMessages] = useState(() => loadHistory());
+  const [modelStatus, setModelStatus] = useState('idle'); // idle | loading | ready | error
+  const [progress, setProgress] = useState(0);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [wikiSearching, setWikiSearching] = useState(false);
+  const [wikiEnabled, setWikiEnabled] = useState(() => loadSettings().wikiEnabled ?? false);
+  const workerRef = useRef(null);
+  const scrollRef = useRef(null);
+  const msgIdCounter = useRef(0);
+
+  // Persist messages
+  useEffect(() => { saveHistory(messages); }, [messages]);
+
+  // Persist settings
+  useEffect(() => { saveSettings({ wikiEnabled }); }, [wikiEnabled]);
+
+  // Auto-scroll
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isGenerating]);
+
+  // Initialize worker
+  const initWorker = useCallback(() => {
+    if (workerRef.current) workerRef.current.terminate();
+    const w = createWorker();
+    w.onmessage = (e) => {
+      const d = e.data;
+      if (d.type === 'status') {
+        if (d.stage === 'loading') setModelStatus('loading');
+        if (d.stage === 'ready') { setModelStatus('ready'); setProgress(100); setTimeout(() => setProgress(0), 1000); }
+      } else if (d.type === 'progress') {
+        setProgress(d.progress);
+      } else if (d.type === 'result') {
+        setMessages(prev => [...prev, { role: 'assistant', content: d.text || '(Keine Antwort)', id: d.id, wikiInfo: d.wikiInfo }]);
+        setIsGenerating(false);
+      } else if (d.type === 'error') {
+        setMessages(prev => [...prev, { role: 'assistant', content: '⚠ Fehler: ' + d.message, id: d.id }]);
+        setIsGenerating(false);
+        if (d.message?.includes('Laden')) setModelStatus('error');
+      }
+    };
+    w.onerror = () => {
+      setModelStatus('error');
+      setIsGenerating(false);
+    };
+    workerRef.current = w;
+    return w;
+  }, []);
+
+  // Load model
+  const loadModel = useCallback(() => {
+    setModelStatus('loading');
+    setProgress(0);
+    const w = workerRef.current || initWorker();
+    w.postMessage({ type: 'load', modelId: MODEL_ID });
+  }, [initWorker]);
+
+  // Send message
+  const sendMessage = useCallback(async (text) => {
+    if (isGenerating) return;
+
+    // If model not ready, start loading first
+    if (modelStatus !== 'ready') {
+      loadModel();
+      // Queue the message after a brief delay to let the model load
+    }
+
+    const userMsg = { role: 'user', content: text, id: Date.now() };
+    setMessages(prev => [...prev, userMsg]);
+    setIsGenerating(true);
+
+    let wikiContext = null;
+    let wikiTitle = null;
+    let warning = null;
+
+    // Wikipedia RAG
+    if (wikiEnabled) {
+      setWikiSearching(true);
+      try {
+        const result = await searchWikipedia(text);
+        if (result) {
+          wikiContext = result.text;
+          wikiTitle = result.title;
+        }
+      } catch (err) {
+        warning = 'Kein Internet — nutze lokales Wissen';
+      }
+      setWikiSearching(false);
+    }
+
+    // Build messages for the model
+    const systemPrompt = wikiContext
+      ? `Du bist NeoAI, ein hilfreicher KI-Assistent. Nutze folgenden Kontext von Wikipedia, um die Frage zu beantworten. Antworte auf Deutsch.\n\n--- Wikipedia: ${wikiTitle} ---\n${wikiContext}\n--- Ende Kontext ---`
+      : 'Du bist NeoAI, ein hilfreicher KI-Assistent. Antworte klar, präzise und auf Deutsch.';
+
+    // Take last 6 messages for context window
+    const recentMsgs = [...messages.slice(-6), userMsg];
+    const chatMessages = [
+      { role: 'system', content: systemPrompt },
+      ...recentMsgs.map(m => ({ role: m.role, content: m.content }))
+    ];
+
+    const id = ++msgIdCounter.current;
+
+    // If worker not initialized, create it
+    if (!workerRef.current) initWorker();
+
+    // Store wiki info for display
+    const origOnMessage = workerRef.current.onmessage;
+    workerRef.current.onmessage = (e) => {
+      const d = e.data;
+      if (d.type === 'result' && d.id === id) {
+        const aiMsg = {
+          role: 'assistant',
+          content: d.text || '(Keine Antwort)',
+          id: d.id,
+          wikiInfo: wikiTitle ? `${wikiTitle}` : undefined,
+          warning: warning || undefined
+        };
+        setMessages(prev => [...prev, aiMsg]);
+        setIsGenerating(false);
+      } else if (d.type === 'error' && d.id === id) {
+        setMessages(prev => [...prev, { role: 'assistant', content: '⚠ Fehler: ' + d.message, id: d.id, warning }]);
+        setIsGenerating(false);
+      } else if (d.type === 'status') {
+        if (d.stage === 'loading') setModelStatus('loading');
+        if (d.stage === 'ready') { setModelStatus('ready'); setProgress(100); setTimeout(() => setProgress(0), 1000); }
+      } else if (d.type === 'progress') {
+        setProgress(d.progress);
+      }
+    };
+
+    workerRef.current.postMessage({
+      type: 'generate',
+      modelId: MODEL_ID,
+      messages: chatMessages,
+      id
+    });
+  }, [messages, isGenerating, wikiEnabled, modelStatus, initWorker, loadModel]);
+
+  // Clear chat
+  const clearChat = useCallback(() => {
+    setMessages([]);
+    saveHistory([]);
+  }, []);
+
+  const hasMessages = messages.length > 0;
+
+  return (
+    <div className="h-dvh flex flex-col bg-surface-300 text-white">
+      <Header
+        wikiEnabled={wikiEnabled}
+        setWikiEnabled={setWikiEnabled}
+        modelStatus={modelStatus}
+        progress={progress}
+      />
+
+      {modelStatus === 'loading' && <ProgressBar progress={progress} />}
+
+      {/* Chat area */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        {!hasMessages && !isGenerating ? (
+          <WelcomeScreen modelStatus={modelStatus} onLoadModel={loadModel} />
+        ) : (
+          <div className="pb-2">
+            {messages.map((msg, i) => (
+              <ChatMessage key={msg.id || i} msg={msg} />
+            ))}
+            {isGenerating && <TypingIndicator wikiSearching={wikiSearching} />}
+          </div>
+        )}
+      </div>
+
+      {/* Clear button when messages exist */}
+      {hasMessages && (
+        <div className="flex justify-center py-1 bg-surface-300">
+          <button
+            onClick={clearChat}
+            className="text-[11px] text-gray-600 hover:text-gray-400 transition-colors px-3 py-1"
+          >
+            Chat löschen
+          </button>
+        </div>
+      )}
+
+      <InputBar onSend={sendMessage} disabled={isGenerating} />
+    </div>
+  );
+}
+
+// ─── Render ─────────────────────────────────────────────────────────────
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+
 </body>
 </html>
