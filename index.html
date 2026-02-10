@@ -76,6 +76,7 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const STORAGE_KEY   = 'neoai-chat-history';
+const SESSIONS_KEY  = 'neoai-chat-sessions';
 const SETTINGS_KEY  = 'neoai-settings';
 const MODEL_ID      = 'onnx-community/Qwen2.5-0.5B-Instruct';
 const FALLBACK_ID   = 'onnx-community/Llama-3.2-1B-Instruct-q4f16';
@@ -109,7 +110,10 @@ async function loadModel(modelId) {
     currentModelId = modelId;
     self.postMessage({ type: 'status', message: 'Modell bereit!', stage: 'ready' });
   } catch (err) {
-    self.postMessage({ type: 'error', message: 'Fehler beim Laden: ' + err.message });
+    // Clear any partially downloaded model from cache
+    generator = null;
+    currentModelId = null;
+    self.postMessage({ type: 'error', message: 'Fehler beim Laden: ' + err.message, shouldClearCache: true });
     throw err;
   }
 }
@@ -181,6 +185,55 @@ function saveSettings(s) {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
 }
 
+// ─── Session Management ─────────────────────────────────────────────────
+function loadSessions() {
+  try {
+    const raw = localStorage.getItem(SESSIONS_KEY);
+    const sessions = raw ? JSON.parse(raw) : [];
+    // Ensure at least one default session exists
+    if (sessions.length === 0) {
+      const defaultSession = {
+        id: Date.now(),
+        name: 'Chat 1',
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      sessions.push(defaultSession);
+      saveSessions(sessions);
+    }
+    return sessions;
+  } catch {
+    const defaultSession = {
+      id: Date.now(),
+      name: 'Chat 1',
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    return [defaultSession];
+  }
+}
+function saveSessions(sessions) {
+  try { localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)); } catch {}
+}
+
+// ─── Cache Management ───────────────────────────────────────────────────
+async function clearModelCache() {
+  try {
+    // Clear IndexedDB caches used by transformers.js
+    const dbs = await indexedDB.databases();
+    for (const db of dbs) {
+      if (db.name && (db.name.includes('transformers') || db.name.includes('onnx') || db.name.includes('cache'))) {
+        indexedDB.deleteDatabase(db.name);
+      }
+    }
+    console.log('Model cache cleared');
+  } catch (err) {
+    console.warn('Could not clear cache:', err);
+  }
+}
+
 // ─── Wikipedia API ──────────────────────────────────────────────────────
 async function searchWikipedia(query) {
   const searchUrl = `${WIKI_API}?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=1&format=json&origin=*`;
@@ -231,7 +284,10 @@ function Toggle({ enabled, onChange, label }) {
 }
 
 // Header
-function Header({ wikiEnabled, setWikiEnabled, modelStatus, progress }) {
+function Header({ modelStatus, progress, sessions, currentSessionId, onSessionChange, onNewSession }) {
+  const [showSessions, setShowSessions] = useState(false);
+  const currentSession = sessions.find(s => s.id === currentSessionId) || sessions[0];
+
   return (
     <header className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-surface-100/80 backdrop-blur-md sticky top-0 z-30">
       <div className="flex items-center gap-3 min-w-0">
@@ -247,7 +303,49 @@ function Header({ wikiEnabled, setWikiEnabled, modelStatus, progress }) {
           </p>
         </div>
       </div>
-      <Toggle enabled={wikiEnabled} onChange={setWikiEnabled} label="Wikipedia" />
+      <div className="relative">
+        <button
+          onClick={() => setShowSessions(!showSessions)}
+          className="flex items-center gap-2 px-3 py-1.5 bg-surface-200 hover:bg-surface-50 rounded-lg transition-colors text-sm text-gray-300"
+        >
+          <span className="truncate max-w-[120px]">{currentSession?.name || 'Chat'}</span>
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {showSessions && (
+          <div className="absolute right-0 mt-2 w-56 bg-surface-100 border border-white/10 rounded-lg shadow-xl z-40 max-h-80 overflow-y-auto">
+            <div className="p-2">
+              <button
+                onClick={() => { onNewSession(); setShowSessions(false); }}
+                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-surface-50 rounded text-sm text-accent-400 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Neuer Chat
+              </button>
+            </div>
+            <div className="border-t border-white/5">
+              {sessions.map(session => (
+                <button
+                  key={session.id}
+                  onClick={() => { onSessionChange(session.id); setShowSessions(false); }}
+                  className={`w-full flex items-start gap-2 px-3 py-2 hover:bg-surface-50 transition-colors text-left ${session.id === currentSessionId ? 'bg-surface-50' : ''}`}
+                >
+                  <svg className="w-4 h-4 shrink-0 mt-0.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-200 truncate">{session.name}</div>
+                    <div className="text-[10px] text-gray-500">{session.messages.length} Nachrichten</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </header>
   );
 }
@@ -378,7 +476,7 @@ function ProgressBar({ progress }) {
 }
 
 // Input Bar
-function InputBar({ onSend, disabled }) {
+function InputBar({ onSend, disabled, wikiEnabled, setWikiEnabled }) {
   const [text, setText] = useState('');
   const textareaRef = useRef(null);
 
@@ -408,35 +506,55 @@ function InputBar({ onSend, disabled }) {
 
   return (
     <form onSubmit={handleSubmit} className="border-t border-white/5 bg-surface-100/80 backdrop-blur-md px-4 py-3">
-      <div className="max-w-2xl mx-auto flex gap-2 items-end">
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          placeholder={disabled ? 'Modell wird geladen...' : 'Nachricht eingeben...'}
-          disabled={disabled}
-          rows={1}
-          className="flex-1 bg-surface-200 text-sm text-white placeholder-gray-500 rounded-xl px-4 py-2.5 resize-none outline-none focus:ring-1 focus:ring-accent-500/50 border border-white/5 disabled:opacity-40"
-        />
-        <button
-          type="submit"
-          disabled={disabled || !text.trim()}
-          className="shrink-0 w-10 h-10 flex items-center justify-center bg-accent-500 hover:bg-accent-600 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl transition-colors"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        </button>
+      <div className="max-w-2xl mx-auto">
+        <div className="flex gap-2 items-end">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            placeholder={disabled ? 'Modell wird geladen...' : 'Nachricht eingeben...'}
+            disabled={disabled}
+            rows={1}
+            className="flex-1 bg-surface-200 text-sm text-white placeholder-gray-500 rounded-xl px-4 py-2.5 resize-none outline-none focus:ring-1 focus:ring-accent-500/50 border border-white/5 disabled:opacity-40"
+          />
+          <button
+            type="button"
+            onClick={() => setWikiEnabled(!wikiEnabled)}
+            className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${wikiEnabled ? 'bg-accent-500/20 text-accent-400 hover:bg-accent-500/30' : 'bg-surface-200 text-gray-500 hover:bg-surface-50'}`}
+            title="Wikipedia Recherche"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+          </button>
+          <button
+            type="submit"
+            disabled={disabled || !text.trim()}
+            className="shrink-0 w-10 h-10 flex items-center justify-center bg-accent-500 hover:bg-accent-600 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl transition-colors"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+        <div className="flex items-center justify-between mt-1.5">
+          <p className="text-[10px] text-gray-600">
+            NeoAI kann Fehler machen. Kompaktes lokales Modell.
+          </p>
+          {wikiEnabled && (
+            <p className="text-[10px] text-indigo-400">
+              📖 Wikipedia aktiv
+            </p>
+          )}
+        </div>
       </div>
-      <p className="text-[10px] text-gray-600 text-center mt-1.5 max-w-2xl mx-auto">
-        NeoAI kann Fehler machen. Kompaktes lokales Modell — Für komplexe Antworten Wikipedia aktivieren.
-      </p>
     </form>
   );
 }
 
 // ─── Main App ───────────────────────────────────────────────────────────
 function App() {
-  const [messages, setMessages] = useState(() => loadHistory());
+  const [sessions, setSessions] = useState(() => loadSessions());
+  const [currentSessionId, setCurrentSessionId] = useState(() => loadSessions()[0].id);
   const [modelStatus, setModelStatus] = useState('idle'); // idle | loading | ready | error
   const [progress, setProgress] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -446,8 +564,11 @@ function App() {
   const scrollRef = useRef(null);
   const msgIdCounter = useRef(0);
 
-  // Persist messages
-  useEffect(() => { saveHistory(messages); }, [messages]);
+  const currentSession = sessions.find(s => s.id === currentSessionId) || sessions[0];
+  const messages = currentSession?.messages || [];
+
+  // Persist sessions
+  useEffect(() => { saveSessions(sessions); }, [sessions]);
 
   // Persist settings
   useEffect(() => { saveSettings({ wikiEnabled }); }, [wikiEnabled]);
@@ -471,12 +592,32 @@ function App() {
       } else if (d.type === 'progress') {
         setProgress(d.progress);
       } else if (d.type === 'result') {
-        setMessages(prev => [...prev, { role: 'assistant', content: d.text || '(Keine Antwort)', id: d.id, wikiInfo: d.wikiInfo }]);
+        setSessions(prev => {
+          const updated = prev.map(s =>
+            s.id === currentSessionId
+              ? { ...s, messages: [...s.messages, { role: 'assistant', content: d.text || '(Keine Antwort)', id: d.id }], updatedAt: Date.now() }
+              : s
+          );
+          return updated;
+        });
         setIsGenerating(false);
       } else if (d.type === 'error') {
-        setMessages(prev => [...prev, { role: 'assistant', content: '⚠ Fehler: ' + d.message, id: d.id }]);
+        setSessions(prev => {
+          const updated = prev.map(s =>
+            s.id === currentSessionId
+              ? { ...s, messages: [...s.messages, { role: 'assistant', content: '⚠ Fehler: ' + d.message, id: d.id }], updatedAt: Date.now() }
+              : s
+          );
+          return updated;
+        });
         setIsGenerating(false);
         if (d.message?.includes('Laden')) setModelStatus('error');
+        // Clear cache if instructed
+        if (d.shouldClearCache) {
+          clearModelCache().then(() => {
+            console.log('Cache cleared after error');
+          });
+        }
       }
     };
     w.onerror = () => {
@@ -485,7 +626,7 @@ function App() {
     };
     workerRef.current = w;
     return w;
-  }, []);
+  }, [currentSessionId]);
 
   // Load model
   const loadModel = useCallback(() => {
@@ -506,7 +647,14 @@ function App() {
     }
 
     const userMsg = { role: 'user', content: text, id: Date.now() };
-    setMessages(prev => [...prev, userMsg]);
+    setSessions(prev => {
+      const updated = prev.map(s =>
+        s.id === currentSessionId
+          ? { ...s, messages: [...s.messages, userMsg], updatedAt: Date.now() }
+          : s
+      );
+      return updated;
+    });
     setIsGenerating(true);
 
     let wikiContext = null;
@@ -534,7 +682,8 @@ function App() {
       : 'Du bist NeoAI, ein hilfreicher KI-Assistent. Antworte klar, präzise und auf Deutsch.';
 
     // Take last 6 messages for context window
-    const recentMsgs = [...messages.slice(-6), userMsg];
+    const currentMessages = [...messages, userMsg];
+    const recentMsgs = currentMessages.slice(-6);
     const chatMessages = [
       { role: 'system', content: systemPrompt },
       ...recentMsgs.map(m => ({ role: m.role, content: m.content }))
@@ -557,11 +706,31 @@ function App() {
           wikiInfo: wikiTitle ? `${wikiTitle}` : undefined,
           warning: warning || undefined
         };
-        setMessages(prev => [...prev, aiMsg]);
+        setSessions(prev => {
+          const updated = prev.map(s =>
+            s.id === currentSessionId
+              ? { ...s, messages: [...s.messages, aiMsg], updatedAt: Date.now() }
+              : s
+          );
+          return updated;
+        });
         setIsGenerating(false);
       } else if (d.type === 'error' && d.id === id) {
-        setMessages(prev => [...prev, { role: 'assistant', content: '⚠ Fehler: ' + d.message, id: d.id, warning }]);
+        setSessions(prev => {
+          const updated = prev.map(s =>
+            s.id === currentSessionId
+              ? { ...s, messages: [...s.messages, { role: 'assistant', content: '⚠ Fehler: ' + d.message, id: d.id, warning }], updatedAt: Date.now() }
+              : s
+          );
+          return updated;
+        });
         setIsGenerating(false);
+        // Clear cache if instructed
+        if (d.shouldClearCache) {
+          clearModelCache().then(() => {
+            console.log('Cache cleared after generation error');
+          });
+        }
       } else if (d.type === 'status') {
         if (d.stage === 'loading') setModelStatus('loading');
         if (d.stage === 'ready') { setModelStatus('ready'); setProgress(100); setTimeout(() => setProgress(0), 1000); }
@@ -576,12 +745,35 @@ function App() {
       messages: chatMessages,
       id
     });
-  }, [messages, isGenerating, wikiEnabled, modelStatus, initWorker, loadModel]);
+  }, [messages, isGenerating, wikiEnabled, modelStatus, initWorker, loadModel, currentSessionId, sessions]);
 
   // Clear chat
   const clearChat = useCallback(() => {
-    setMessages([]);
-    saveHistory([]);
+    setSessions(prev => {
+      const updated = prev.map(s =>
+        s.id === currentSessionId
+          ? { ...s, messages: [], updatedAt: Date.now() }
+          : s
+      );
+      return updated;
+    });
+  }, [currentSessionId]);
+
+  // Session management
+  const createNewSession = useCallback(() => {
+    const newSession = {
+      id: Date.now(),
+      name: `Chat ${sessions.length + 1}`,
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    setSessions(prev => [...prev, newSession]);
+    setCurrentSessionId(newSession.id);
+  }, [sessions]);
+
+  const switchSession = useCallback((sessionId) => {
+    setCurrentSessionId(sessionId);
   }, []);
 
   const hasMessages = messages.length > 0;
@@ -589,10 +781,12 @@ function App() {
   return (
     <div className="h-dvh flex flex-col bg-surface-300 text-white">
       <Header
-        wikiEnabled={wikiEnabled}
-        setWikiEnabled={setWikiEnabled}
         modelStatus={modelStatus}
         progress={progress}
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        onSessionChange={switchSession}
+        onNewSession={createNewSession}
       />
 
       {modelStatus === 'loading' && <ProgressBar progress={progress} />}
@@ -623,7 +817,12 @@ function App() {
         </div>
       )}
 
-      <InputBar onSend={sendMessage} disabled={isGenerating} />
+      <InputBar
+        onSend={sendMessage}
+        disabled={isGenerating}
+        wikiEnabled={wikiEnabled}
+        setWikiEnabled={setWikiEnabled}
+      />
     </div>
   );
 }
