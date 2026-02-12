@@ -3,6 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="Private KI direkt im Browser - 100% offline-fähig" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="NeoAI" />
+  <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiTmVvQUkgQ2hhdCIsInNob3J0X25hbWUiOiJOZW9BSSIsInN0YXJ0X3VybCI6Ii4vIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzBhMGExYSIsInRoZW1lX2NvbG9yIjoiIzBhMGExYSIsImRlc2NyaXB0aW9uIjoiUHJpdmF0ZSBLSSBkaXJla3QgaW0gQnJvd3NlciIsImljb25zIjpbeyJzcmMiOiJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUI0Yld4dWN6MGlhSFIwY0RvdkwzZDNkeTUzTXk1dmNtY3ZNakF3TUM5emRtY2lJSGRwWkhSb1BTSTFNVE1pSUdobGFXZG9kRDBpTlRFeklqNDhjbVZqZENCM2FXUjBhRDBpTlRFeklpQm9aV2xuYUhROUlqVXhNeUlnY21nOUlqSTFOaUlnWm1sc2JEMGlJell6TmpabU1TSXZQanh3WVhSb0lHUTlJazB5TlRZZ01UVTJhREV3TUhZdE1UQXdhREV3TUhZeE1EQm9NVEF3ZGkweE1EQjZJaUJtYVd4c1BTSWpabVptSWk4K1BDOXpkbWMrIiwidHlwZSI6ImltYWdlL3N2Zyt4bWwiLCJzaXplcyI6IjUxMng1MTIiLCJwdXJwb3NlIjoiYW55IG1hc2thYmxlIn1dfQ==" />
   <title>NeoAI Chat • Lokale KI</title>
 
   <!-- Tailwind CSS -->
@@ -173,6 +179,13 @@ const WIKI_API      = 'https://de.wikipedia.org/w/api.php';
 // Available models for selection
 const AVAILABLE_MODELS = [
   {
+    id: 'onnx-community/SmolLM2-360M-Instruct',
+    name: 'SmolLM2-360M',
+    description: 'SmolLM2-360M (optimal für iPad 9)',
+    size: '~180 MB',
+    icon: '🟢'
+  },
+  {
     id: 'onnx-community/phi-2',
     name: 'Phi-2',
     description: 'Microsoft Phi-2 (2.7B Parameter)',
@@ -191,11 +204,11 @@ const AVAILABLE_MODELS = [
     name: 'SmolLM',
     description: 'SmolLM (135M Parameter - schnell)',
     size: '~70 MB',
-    icon: '🟢'
+    icon: '🟡'
   }
 ];
 
-const DEFAULT_MODEL = 'onnx-community/phi-2';
+const DEFAULT_MODEL = 'onnx-community/SmolLM2-360M-Instruct';
 
 // ─── Worker Source (Blob) ───────────────────────────────────────────────
 const workerCode = `
@@ -893,10 +906,26 @@ function WelcomeScreen({ modelStatus, onLoadModel, selectedModel, onModelChange 
         )}
 
         {modelStatus === 'error' && (
-          <div className="space-y-4">
-            <p className="text-sm text-red-400">
-              WebGPU wird nicht unterstützt oder das Modell konnte nicht geladen werden.
-            </p>
+          <div className="space-y-4 max-w-lg mx-auto">
+            <div className="flex items-center justify-center gap-3 text-red-400">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-lg font-semibold">WebGPU nicht verfügbar</span>
+            </div>
+            <div className="text-sm text-gray-300 text-left bg-white/5 p-4 rounded-xl border border-white/10 space-y-3">
+              <p className="font-semibold text-white">iPad-Nutzer (Safari):</p>
+              <ol className="list-decimal list-inside space-y-2 text-xs">
+                <li>Öffne <strong>Einstellungen</strong> auf deinem iPad</li>
+                <li>Gehe zu <strong>Safari → Erweitert</strong></li>
+                <li>Aktiviere <strong>Experimentelle Features</strong></li>
+                <li>Aktiviere <strong>WebGPU</strong></li>
+                <li>Starte Safari neu und lade diese Seite erneut</li>
+              </ol>
+              <p className="text-[10px] text-gray-400 mt-2">
+                WebGPU ist erforderlich für die Hardware-beschleunigte KI-Inferenz auf dem iPad.
+              </p>
+            </div>
             <button
               onClick={() => setShowModelPicker(true)}
               className="px-6 py-3 bg-gray-700/80 hover:bg-gray-600/80 text-white text-sm font-medium rounded-xl transition-all border border-white/10"
@@ -910,9 +939,9 @@ function WelcomeScreen({ modelStatus, onLoadModel, selectedModel, onModelChange 
         <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
           {[
             { icon: '🔒', title: '100% Lokal', text: 'Keine Daten verlassen deinen Browser' },
-            { icon: '⚡', title: 'WebGPU-Power', text: 'Hardwarebeschleunigt mit Liquid-Architektur' },
+            { icon: '⚡', title: 'iPad 9 optimiert', text: 'Nur ~180MB RAM mit WebGPU + Q4' },
             { icon: '📖', title: 'Wikipedia RAG', text: 'Optional: Erweitere Antworten mit Wissen' },
-            { icon: '💾', title: 'Auto-Save', text: 'Chat wird automatisch gespeichert' }
+            { icon: '💾', title: 'PWA & Offline', text: 'Installierbar und offline-fähig' }
           ].map((item, i) => (
             <div key={i} className="flex items-start gap-4 text-sm bg-white/5 px-5 py-4 rounded-xl border border-white/5 hover:bg-white/8 transition-colors">
               <span className="text-2xl shrink-0">{item.icon}</span>
@@ -1398,6 +1427,82 @@ function App() {
 // ─── Render ─────────────────────────────────────────────────────────────
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
+
+// ─── Service Worker Registration ────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    // Create service worker inline
+    const swCode = `
+      const CACHE_NAME = 'neoai-v1';
+      const urlsToCache = [
+        './',
+        './index.html'
+      ];
+
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => cache.addAll(urlsToCache))
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        event.respondWith(
+          caches.match(event.request)
+            .then((response) => response || fetch(event.request))
+        );
+      });
+
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.map((cacheName) => {
+                if (cacheName !== CACHE_NAME) {
+                  return caches.delete(cacheName);
+                }
+              })
+            );
+          })
+        );
+      });
+    `;
+
+    const blob = new Blob([swCode], { type: 'application/javascript' });
+    const swUrl = URL.createObjectURL(blob);
+
+    navigator.serviceWorker.register(swUrl)
+      .then((registration) => {
+        console.log('Service Worker registered:', registration);
+      })
+      .catch((error) => {
+        console.log('Service Worker registration failed:', error);
+      });
+  });
+}
+
+// ─── WebGPU Detection ────────────────────────────────────────────────────
+async function checkWebGPU() {
+  if (!navigator.gpu) {
+    console.warn('WebGPU nicht verfügbar');
+    return false;
+  }
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    return !!adapter;
+  } catch (e) {
+    console.warn('WebGPU Adapter konnte nicht angefordert werden:', e);
+    return false;
+  }
+}
+
+// Check WebGPU on load
+checkWebGPU().then(available => {
+  if (!available) {
+    console.warn('WebGPU ist nicht aktiviert. iPad-Nutzer sollten in Safari > Einstellungen > Erweitert > Experimentelle Features > WebGPU aktivieren.');
+  }
+});
+
 </script>
 
 </body>
