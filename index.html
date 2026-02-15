@@ -183,36 +183,16 @@ const MODEL_CACHE_NAME = 'neoai-model-cache';
 // Available models for selection
 const AVAILABLE_MODELS = [
   {
-    id: 'onnx-community/SmolLM2-360M-Instruct',
+    id: 'HuggingFaceTB/SmolLM2-360M-Instruct',
     name: 'SmolLM2-360M',
-    description: 'SmolLM2-360M (optimal für iPad 9)',
-    size: '~180 MB',
+    description: 'Kompaktes SmolLM2 Instruct (ONNX q4f16)',
+    size: '~273 MB',
     icon: '🟢'
-  },
-  {
-    id: 'onnx-community/phi-2',
-    name: 'Phi-2',
-    description: 'Microsoft Phi-2 (2.7B Parameter)',
-    size: '~1.5 GB',
-    icon: '🔵'
-  },
-  {
-    id: 'onnx-community/Phi-3-mini-4k-instruct',
-    name: 'Phi-3 Mini',
-    description: 'Microsoft Phi-3 Mini (3.8B Parameter)',
-    size: '~2.3 GB',
-    icon: '🟣'
-  },
-  {
-    id: 'onnx-community/SmolLM-135M-Instruct',
-    name: 'SmolLM',
-    description: 'SmolLM (135M Parameter - schnell)',
-    size: '~70 MB',
-    icon: '🟡'
   }
 ];
 
-const DEFAULT_MODEL = 'onnx-community/SmolLM2-360M-Instruct';
+const DEFAULT_MODEL = 'HuggingFaceTB/SmolLM2-360M-Instruct';
+const DEFAULT_MODEL_FILE = 'onnx/model_q4f16.onnx';
 const modelCacheRequest = (modelId) => new Request(`https://neoai.local/cache/${encodeURIComponent(modelId)}`);
 
 // ─── Worker Source (Blob) ───────────────────────────────────────────────
@@ -224,10 +204,13 @@ env.allowLocalModels = false;
 let generator = null;
 let currentModelId = null;
 let hfToken = null;
+const FALLBACK_MODEL_ID = '${DEFAULT_MODEL}';
+const FALLBACK_MODEL_FILE = '${DEFAULT_MODEL_FILE}';
 
 async function loadModel(modelId) {
-  if (generator && currentModelId === modelId) return;
-  self.postMessage({ type: 'status', message: 'Lade Modell: ' + modelId + '...', stage: 'loading' });
+  const targetModel = modelId || FALLBACK_MODEL_ID;
+  if (generator && currentModelId === targetModel) return;
+  self.postMessage({ type: 'status', message: 'Lade Modell: ' + targetModel + '...', stage: 'loading' });
 
   try {
     // Set HF token if available
@@ -235,18 +218,34 @@ async function loadModel(modelId) {
       env.remoteModels = { accessToken: hfToken };
     }
 
-    generator = await pipeline('text-generation', modelId, {
-      device: 'webgpu',
-      dtype: 'q4',
-      progress_callback: (p) => {
-        if (p.status === 'progress' && p.progress != null) {
-          self.postMessage({ type: 'progress', progress: Math.round(p.progress), file: p.file || '' });
-        } else if (p.status === 'done') {
-          self.postMessage({ type: 'status', message: 'Modell-Datei geladen', stage: 'loaded_file' });
+    try {
+      generator = await pipeline('text-generation', targetModel, {
+        device: 'webgpu',
+        dtype: 'q4',
+        model_file: FALLBACK_MODEL_FILE,
+        progress_callback: (p) => {
+          if (p.status === 'progress' && p.progress != null) {
+            self.postMessage({ type: 'progress', progress: Math.round(p.progress), file: p.file || '' });
+          } else if (p.status === 'done') {
+            self.postMessage({ type: 'status', message: 'Modell-Datei geladen', stage: 'loaded_file' });
+          }
         }
-      }
-    });
-    currentModelId = modelId;
+      });
+    } catch (quantErr) {
+      self.postMessage({ type: 'status', message: 'Falle zurück auf Standard-Datei…', stage: 'retry' });
+      generator = await pipeline('text-generation', targetModel, {
+        device: 'webgpu',
+        dtype: 'q4',
+        progress_callback: (p) => {
+          if (p.status === 'progress' && p.progress != null) {
+            self.postMessage({ type: 'progress', progress: Math.round(p.progress), file: p.file || '' });
+          } else if (p.status === 'done') {
+            self.postMessage({ type: 'status', message: 'Modell-Datei geladen', stage: 'loaded_file' });
+          }
+        }
+      });
+    }
+    currentModelId = targetModel;
     self.postMessage({ type: 'status', message: 'Modell bereit!', stage: 'ready' });
   } catch (err) {
     // Clear any partially downloaded model from cache
@@ -295,7 +294,7 @@ self.onmessage = async (e) => {
   } else if (type === 'load') {
     try { await loadModel(modelId); } catch(_) {}
   } else if (type === 'generate') {
-    if (!generator && modelId) await loadModel(modelId);
+    if (!generator) await loadModel(modelId || FALLBACK_MODEL_ID);
     await generate(messages, id);
   }
 };
@@ -320,7 +319,12 @@ function saveHistory(msgs) {
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    return raw ? JSON.parse(raw) : { selectedModel: DEFAULT_MODEL, theme: 'dark' };
+    if (!raw) return { selectedModel: DEFAULT_MODEL, theme: 'dark' };
+    const parsed = JSON.parse(raw);
+    if (parsed.selectedModel !== DEFAULT_MODEL) {
+      parsed.selectedModel = DEFAULT_MODEL;
+    }
+    return { selectedModel: DEFAULT_MODEL, theme: 'dark', ...parsed };
   } catch { return { selectedModel: DEFAULT_MODEL, theme: 'dark' }; }
 }
 function saveSettings(s) {
@@ -483,7 +487,7 @@ async function searchWikipedia(query) {
 
   const page = Object.values(pages)[0];
   const extract = page?.extract || '';
-  // Increased context length to 2500 chars for Phi-2 model
+  // Kompakter Kontext für SmolLM2
   return { title: page.title, text: extract.slice(0, 2500) };
 }
 
@@ -512,6 +516,118 @@ function Toggle({ enabled, onChange, label }) {
       </div>
       <span className="text-gray-300 text-xs sm:text-sm whitespace-nowrap">{label}</span>
     </button>
+  );
+}
+
+// Sidebar navigation
+function Sidebar({ open, onClose, sessions, currentSessionId, onSessionChange, onNewSession, wikiEnabled, onToggleWiki, modelStatus, modelCached, onLoadModel }) {
+  return (
+    <>
+      <div
+        className={`fixed inset-0 bg-black/40 lg:hidden transition-opacity duration-200 ${open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+      />
+      <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-72 bg-surface-200/90 backdrop-blur-xl border-r border-white/10 transition-transform duration-200 ${open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="p-4 border-b border-white/5 flex items-center justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.08em] text-gray-500">NeoAI</div>
+            <div className="text-lg font-semibold text-white">SmolLM2 Chat</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-surface-50 transition-colors"
+            aria-label="Sidebar schließen"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4 h-[calc(100%-64px)] overflow-y-auto">
+          <div className="space-y-2">
+            <button
+              onClick={() => { onNewSession(); onClose(); }}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gradient-to-r from-accent-500 to-accent-600 text-white font-medium shadow-lg shadow-accent-500/30 hover:shadow-accent-500/50 transition-all"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Neuer Chat
+            </button>
+            <button
+              onClick={onLoadModel}
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-surface-100 border border-white/10 text-sm text-gray-200 hover:border-white/20 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <span className="inline-flex w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <div className="text-left">
+                  <div className="font-semibold text-white text-sm">SmolLM2-360M</div>
+                  <div className="text-[11px] text-gray-500">ONNX q4f16 · ~273 MB</div>
+                </div>
+              </div>
+              <span className={`text-[11px] px-2 py-0.5 rounded-full border ${modelStatus === 'ready' ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100' : 'border-white/10 text-gray-400'}`}>
+                {modelStatus === 'ready' ? 'Bereit' : 'Laden'}
+              </span>
+            </button>
+            {modelCached && (
+              <div className="flex items-center gap-2 text-[11px] text-emerald-200 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-lg">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Modell im Cache
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-[11px] text-gray-500 px-1">Verläufe</div>
+            <div className="space-y-1">
+              {sessions.map((session) => (
+                <button
+                  key={session.id}
+                  onClick={() => { onSessionChange(session.id); onClose(); }}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-left transition-colors border ${session.id === currentSessionId ? 'border-accent-500/60 bg-accent-500/10 text-white' : 'border-white/5 bg-surface-100 hover:border-white/15 text-gray-200'}`}
+                >
+                  <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{session.name}</div>
+                    <div className="text-[10px] text-gray-500">{session.messages.length} Nachrichten</div>
+                  </div>
+                </button>
+              ))}
+              {!sessions.length && (
+                <div className="text-xs text-gray-500 px-2 py-3 border border-dashed border-white/10 rounded-lg">
+                  Noch keine Verläufe
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3 border-t border-white/5 pt-3">
+            <button
+              onClick={onToggleWiki}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors border ${wikiEnabled ? 'border-indigo-500/40 bg-indigo-500/10 text-white' : 'border-white/10 bg-surface-100 text-gray-300 hover:border-white/20'}`}
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+                Wikipedia an/aus
+              </span>
+              <span className={`text-[11px] px-2 py-0.5 rounded-full border ${wikiEnabled ? 'border-indigo-400/60 bg-indigo-500/20 text-indigo-100' : 'border-white/10 text-gray-400'}`}>
+                {wikiEnabled ? 'Aktiv' : 'Aus'}
+              </span>
+            </button>
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              SmolLM2-360M Instruct läuft lokal im Browser. Downloads nutzen die optimierte q4f16-ONNX-Variante, um Hänger zu vermeiden.
+            </p>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -587,25 +703,17 @@ function SettingsModal({ isOpen, onClose, hfToken, onTokenChange, theme, onTheme
           {/* Model Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-3">
-              KI-Modell auswählen
+              KI-Modell
             </label>
-            <div className="space-y-2">
-              {AVAILABLE_MODELS.map((model) => (
-                <button
-                  key={model.id}
-                  onClick={() => setLocalModel(model.id)}
-                  className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${localModel === model.id ? 'border-accent-500 bg-accent-500/10' : 'border-white/10 hover:border-white/20'}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">{model.icon}</span>
-                    <div className="flex-1">
-                      <div className="font-semibold text-white">{model.name}</div>
-                      <div className="text-xs text-gray-400">{model.description}</div>
-                      <div className="text-[10px] text-gray-500 mt-1">Größe: {model.size}</div>
-                    </div>
-                  </div>
-                </button>
-              ))}
+            <div className="px-4 py-3 rounded-xl border-2 border-accent-500 bg-accent-500/10">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">🟢</span>
+                <div className="flex-1">
+                  <div className="font-semibold text-white">SmolLM2-360M</div>
+                  <div className="text-xs text-gray-400">Festes Modell (HuggingFaceTB · ONNX q4f16)</div>
+                  <div className="text-[10px] text-gray-500 mt-1">Download: ~273 MB</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -668,46 +776,58 @@ function SettingsModal({ isOpen, onClose, hfToken, onTokenChange, theme, onTheme
 }
 
 // Header
-function Header({ modelStatus, runtimeStatus, modelCached, sessions, currentSessionId, onSessionChange, onNewSession, onOpenSettings }) {
-  const [showSessions, setShowSessions] = useState(false);
-  const dropdownRef = useRef(null);
-  const currentSession = sessions.find(s => s.id === currentSessionId) || sessions[0];
+function Header({ modelStatus, runtimeStatus, modelCached, progress, onOpenSettings, onToggleSidebar }) {
   const runtimeChip = useMemo(() => {
     if (runtimeStatus === 'offline') return { label: 'Offline', classes: 'bg-red-500/20 text-red-200 border-red-500/30' };
     if (runtimeStatus === 'gpu') return { label: 'GPU aktiv', classes: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30' };
     return { label: 'CPU', classes: 'bg-amber-500/20 text-amber-100 border-amber-500/30' };
   }, [runtimeStatus]);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setShowSessions(false);
-      }
-    };
-    if (showSessions) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showSessions]);
+  const statusLabel = useMemo(() => {
+    if (modelStatus === 'ready') return 'Modell bereit – SmolLM2-360M';
+    if (modelStatus === 'loading') return `Lade Modell ${progress > 0 ? `(${progress}%)` : ''}`;
+    if (modelStatus === 'error') return 'Fehler beim Laden';
+    return 'Modell noch nicht geladen';
+  }, [modelStatus, progress]);
 
   return (
     <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-gradient-to-r from-surface-100/90 to-surface-200/90 backdrop-blur-xl sticky top-0 z-30 shadow-lg">
       <div className="flex items-center gap-3 min-w-0">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg font-bold shrink-0 transition-all ${modelStatus === 'ready' ? 'bg-gradient-to-br from-accent-500 to-accent-600 text-white shadow-lg shadow-accent-500/30' : 'bg-gray-700/50 text-gray-400'}`}>
+        <button
+          onClick={onToggleSidebar}
+          className="lg:hidden w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-surface-200/80 text-gray-300 hover:text-white hover:border-white/20"
+          aria-label="Sidebar umschalten"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h10" />
+          </svg>
+        </button>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold shrink-0 transition-all ${modelStatus === 'ready' ? 'bg-gradient-to-br from-accent-500 to-accent-600 text-white shadow-lg shadow-accent-500/30' : 'bg-gray-700/50 text-gray-400'}`}>
           N
         </div>
         <div className="min-w-0">
-          <h1 className="text-sm font-bold text-white truncate tracking-tight">NeoAI Chat</h1>
-          <p className="text-[10px] text-gray-400 truncate flex items-center gap-1">
+          <h1 className="text-sm font-bold text-white truncate tracking-tight">NeoAI • SmolLM2-360M</h1>
+          <p className="text-[11px] text-gray-400 truncate flex items-center gap-1">
             {modelStatus === 'ready' ? (
-              <><span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Modell bereit – Offline-fähig</>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                {statusLabel}
+              </span>
             ) : modelStatus === 'loading' ? (
-              <><span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Lade... {progress > 0 ? progress + '%' : ''}</>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                {statusLabel}
+              </span>
             ) : modelStatus === 'error' ? (
-              <><span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400"></span> Fehler</>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400" />
+                {statusLabel}
+              </span>
             ) : (
-              <><span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-500"></span> Nicht geladen</>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-500" />
+                {statusLabel}
+              </span>
             )}
           </p>
           <div className="flex items-center gap-2 mt-1">
@@ -722,15 +842,6 @@ function Header({ modelStatus, runtimeStatus, modelCached, sessions, currentSess
       </div>
       <div className="flex items-center gap-2">
         <button
-          onClick={() => { onNewSession(); setShowSessions(false); }}
-          className="hidden sm:flex items-center gap-2 px-3 py-2 bg-surface-200/80 hover:bg-surface-50 rounded-xl transition-all text-sm text-gray-200 font-medium border border-white/5 hover:border-white/10"
-        >
-          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Neuer Chat
-        </button>
-        <button
           onClick={onOpenSettings}
           className="w-9 h-9 flex items-center justify-center bg-surface-200/80 hover:bg-surface-50 rounded-xl transition-all text-gray-400 hover:text-white border border-white/5 hover:border-white/10"
           title="Einstellungen"
@@ -740,53 +851,6 @@ function Header({ modelStatus, runtimeStatus, modelCached, sessions, currentSess
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </button>
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={() => setShowSessions(!showSessions)}
-            className="flex items-center gap-2 px-3 py-2 bg-surface-200/80 hover:bg-surface-50 rounded-xl transition-all text-sm text-gray-200 font-medium border border-white/5 hover:border-white/10"
-          >
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-            </svg>
-            <span className="truncate max-w-[100px]">{currentSession?.name || 'Chat'}</span>
-            <svg className={`w-4 h-4 shrink-0 transition-transform ${showSessions ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {showSessions && (
-          <div className="absolute right-0 mt-2 w-64 bg-surface-100/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-40 max-h-80 overflow-y-auto">
-            <div className="p-2">
-              <div className="text-[10px] text-gray-500 px-1 pb-1">Verläufe (IndexedDB)</div>
-              <button
-                onClick={() => { onNewSession(); setShowSessions(false); }}
-                className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-surface-50 rounded-lg text-sm text-accent-400 font-medium transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Neuer Chat
-              </button>
-            </div>
-            <div className="border-t border-white/5">
-              {sessions.map(session => (
-                <button
-                  key={session.id}
-                  onClick={() => { onSessionChange(session.id); setShowSessions(false); }}
-                  className={`w-full flex items-start gap-2 px-3 py-2.5 hover:bg-surface-50 transition-colors text-left ${session.id === currentSessionId ? 'bg-surface-50/50 border-l-2 border-accent-500' : ''}`}
-                >
-                  <svg className="w-4 h-4 shrink-0 mt-0.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-100 font-medium truncate">{session.name}</div>
-                    <div className="text-[10px] text-gray-500">{session.messages.length} Nachrichten</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        </div>
       </div>
     </header>
   );
@@ -879,83 +943,37 @@ function TypingIndicator({ wikiSearching }) {
 }
 
 // Welcome Screen
-function WelcomeScreen({ modelStatus, onLoadModel, selectedModel, onModelChange }) {
-  const [showModelPicker, setShowModelPicker] = useState(false);
-  const currentModel = AVAILABLE_MODELS.find(m => m.id === selectedModel) || AVAILABLE_MODELS[0];
-
-  const handleModelSelect = (modelId) => {
-    onModelChange(modelId);
-    setShowModelPicker(false);
-  };
-
-  const handleStartClick = () => {
-    if (!showModelPicker && modelStatus === 'idle') {
-      setShowModelPicker(true);
-    } else {
-      onLoadModel();
-    }
-  };
-
+function WelcomeScreen({ modelStatus, onLoadModel }) {
   return (
     <div className="flex-1 flex items-center justify-center p-6">
       <div className="text-center max-w-2xl w-full">
         <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-accent-500 to-accent-600 flex items-center justify-center glow-pulse shadow-2xl shadow-accent-500/30">
           <span className="text-5xl font-bold text-white">N</span>
         </div>
-        <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">Welcome to NEO AI</h1>
-        <p className="text-base text-gray-400 mb-8 leading-relaxed max-w-lg mx-auto">
-          Deine private KI, die direkt in deinem Browser läuft.
-          Keine Cloud, keine Daten werden gesendet – 100% lokal.
+        <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">ChatGPT-Style mit SmolLM2</h1>
+        <p className="text-base text-gray-400 mb-6 leading-relaxed max-w-lg mx-auto">
+          Komplett lokal im Browser mit dem kompakten HuggingFaceTB/SmolLM2-360M-Instruct (ONNX q4f16). Öffne die Sidebar links, um neue Chats zu starten oder den Wikipedia-Modus zu aktivieren.
         </p>
 
-        {/* Model Selection */}
-        {showModelPicker && modelStatus === 'idle' && (
-          <div className="mb-6 space-y-3 animate-[fadeIn_0.3s_ease-out]">
-            <h3 className="text-lg font-semibold text-white mb-4">Wähle dein KI-Modell</h3>
-            {AVAILABLE_MODELS.map((model) => (
-              <button
-                key={model.id}
-                onClick={() => handleModelSelect(model.id)}
-                className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-all hover:scale-[1.02] ${selectedModel === model.id ? 'border-accent-500 bg-accent-500/10 shadow-lg shadow-accent-500/20' : 'border-white/10 hover:border-white/20 bg-white/5'}`}
-              >
-                <div className="flex items-center gap-4">
-                  <span className="text-3xl">{model.icon}</span>
-                  <div className="flex-1">
-                    <div className="font-bold text-white text-lg">{model.name}</div>
-                    <div className="text-sm text-gray-400">{model.description}</div>
-                    <div className="text-xs text-gray-500 mt-1">Download: {model.size}</div>
-                  </div>
-                  {selectedModel === model.id && (
-                    <svg className="w-6 h-6 text-accent-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Action Button */}
         {modelStatus === 'idle' && (
           <button
-            onClick={showModelPicker ? onLoadModel : handleStartClick}
+            onClick={onLoadModel}
             className="px-8 py-4 bg-gradient-to-r from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 text-white text-base font-bold rounded-xl transition-all shadow-xl shadow-accent-500/30 hover:shadow-2xl hover:shadow-accent-500/40 hover:scale-105"
           >
-            {showModelPicker ? `${currentModel.name} laden & starten` : 'Modell auswählen & starten'}
+            SmolLM2-360M laden
           </button>
         )}
 
         {modelStatus === 'loading' && (
           <div className="space-y-4">
-            <div className="h-3 w-80 mx-auto rounded-full overflow-hidden bg-gray-700/50 border border-white/5">
+            <div className="h-3 w-80 max-w-full mx-auto rounded-full overflow-hidden bg-gray-700/50 border border-white/5">
               <div className="shimmer-bar h-full rounded-full" />
             </div>
             <p className="text-sm text-gray-400">
-              {currentModel.name} wird heruntergeladen...
+              SmolLM2-360M wird heruntergeladen…
             </p>
             <p className="text-xs text-gray-500">
-              Download-Größe: {currentModel.size}
+              Optimierte ONNX q4f16 • ~273 MB
             </p>
           </div>
         )}
@@ -966,10 +984,10 @@ function WelcomeScreen({ modelStatus, onLoadModel, selectedModel, onModelChange 
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="text-lg font-semibold">{currentModel.name} bereit!</span>
+              <span className="text-lg font-semibold">SmolLM2-360M bereit!</span>
             </div>
             <p className="text-sm text-gray-400">
-              Schreib deine erste Nachricht unten
+              Starte links einen Chat oder schreib direkt los.
             </p>
           </div>
         )}
@@ -992,35 +1010,11 @@ function WelcomeScreen({ modelStatus, onLoadModel, selectedModel, onModelChange 
                 <li>Starte Safari neu und lade diese Seite erneut</li>
               </ol>
               <p className="text-[10px] text-gray-400 mt-2">
-                WebGPU ist erforderlich für die Hardware-beschleunigte KI-Inferenz auf dem iPad.
+                WebGPU ist erforderlich für die Hardware-beschleunigte KI-Inferenz.
               </p>
             </div>
-            <button
-              onClick={() => setShowModelPicker(true)}
-              className="px-6 py-3 bg-gray-700/80 hover:bg-gray-600/80 text-white text-sm font-medium rounded-xl transition-all border border-white/10"
-            >
-              Anderes Modell wählen
-            </button>
           </div>
         )}
-
-        {/* Feature Grid */}
-        <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
-          {[
-            { icon: '🔒', title: '100% Lokal', text: 'Keine Daten verlassen deinen Browser' },
-            { icon: '⚡', title: 'iPad 9 optimiert', text: 'Nur ~180MB RAM mit WebGPU + Q4' },
-            { icon: '📖', title: 'Wikipedia RAG', text: 'Optional: Erweitere Antworten mit Wissen' },
-            { icon: '💾', title: 'PWA & Offline', text: 'Installierbar und offline-fähig' }
-          ].map((item, i) => (
-            <div key={i} className="flex items-start gap-4 text-sm bg-white/5 px-5 py-4 rounded-xl border border-white/5 hover:bg-white/8 transition-colors">
-              <span className="text-2xl shrink-0">{item.icon}</span>
-              <div>
-                <div className="font-semibold text-white mb-1">{item.title}</div>
-                <div className="text-xs text-gray-400">{item.text}</div>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
@@ -1149,6 +1143,7 @@ function App() {
   const [theme, setTheme] = useState(() => loadSettings().theme || 'dark');
   const [selectedModel, setSelectedModel] = useState(() => loadSettings().selectedModel || DEFAULT_MODEL);
   const [showSettings, setShowSettings] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : true));
   const workerRef = useRef(null);
   const scrollRef = useRef(null);
   const msgIdCounter = useRef(0);
@@ -1516,71 +1511,89 @@ function App() {
   }, []);
 
   const hasMessages = messages.length > 0;
+  const closeSidebar = useCallback(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      setSidebarOpen(true);
+      return;
+    }
+    setSidebarOpen(false);
+  }, []);
 
   return (
-    <div className="h-dvh flex flex-col bg-surface-300 text-white">
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        hfToken={hfToken}
-        onTokenChange={setHfToken}
-        theme={theme}
-        onThemeChange={setTheme}
-        selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
-      />
-      <Header
-        modelStatus={modelStatus}
-        runtimeStatus={runtimeStatus}
-        modelCached={modelCached}
-        progress={progress}
+    <div className="h-dvh flex bg-surface-300 text-white">
+      <Sidebar
+        open={sidebarOpen}
+        onClose={closeSidebar}
         sessions={sessions}
         currentSessionId={currentSessionId}
         onSessionChange={switchSession}
         onNewSession={createNewSession}
-        onOpenSettings={() => setShowSettings(true)}
-      />
-
-      {modelStatus === 'loading' && <ProgressBar progress={progress} />}
-
-      {/* Chat area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        {!hasMessages && !isGenerating ? (
-          <WelcomeScreen
-            modelStatus={modelStatus}
-            onLoadModel={loadModel}
-            selectedModel={selectedModel}
-            onModelChange={setSelectedModel}
-          />
-        ) : (
-          <div className="pb-2">
-            {messages.map((msg, i) => (
-              <ChatMessage key={msg.id || i} msg={msg} />
-            ))}
-            {isGenerating && <TypingIndicator wikiSearching={wikiSearching} />}
-          </div>
-        )}
-      </div>
-
-      {/* Clear button when messages exist */}
-      {hasMessages && (
-        <div className="flex justify-center py-2 bg-surface-300 border-t border-white/5">
-          <button
-            onClick={clearChat}
-            className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors px-4 py-1.5 rounded-lg hover:bg-white/5"
-          >
-            Chat löschen
-          </button>
-        </div>
-      )}
-
-      <InputBar
-        onSend={sendMessage}
-        disabled={isGenerating}
         wikiEnabled={wikiEnabled}
         onToggleWiki={toggleWiki}
-        wikiNotice={wikiNotice}
+        modelStatus={modelStatus}
+        modelCached={modelCached}
+        onLoadModel={loadModel}
       />
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <SettingsModal
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+          hfToken={hfToken}
+          onTokenChange={setHfToken}
+          theme={theme}
+          onThemeChange={setTheme}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+        />
+        <Header
+          modelStatus={modelStatus}
+          runtimeStatus={runtimeStatus}
+          modelCached={modelCached}
+          progress={progress}
+          onOpenSettings={() => setShowSettings(true)}
+          onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        />
+
+        {modelStatus === 'loading' && <ProgressBar progress={progress} />}
+
+        {/* Chat area */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto">
+          {!hasMessages && !isGenerating ? (
+            <WelcomeScreen
+              modelStatus={modelStatus}
+              onLoadModel={loadModel}
+            />
+          ) : (
+            <div className="pb-2">
+              {messages.map((msg, i) => (
+                <ChatMessage key={msg.id || i} msg={msg} />
+              ))}
+              {isGenerating && <TypingIndicator wikiSearching={wikiSearching} />}
+            </div>
+          )}
+        </div>
+
+        {/* Clear button when messages exist */}
+        {hasMessages && (
+          <div className="flex justify-center py-2 bg-surface-300 border-t border-white/5">
+            <button
+              onClick={clearChat}
+              className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors px-4 py-1.5 rounded-lg hover:bg-white/5"
+            >
+              Chat löschen
+            </button>
+          </div>
+        )}
+
+        <InputBar
+          onSend={sendMessage}
+          disabled={isGenerating}
+          wikiEnabled={wikiEnabled}
+          onToggleWiki={toggleWiki}
+          wikiNotice={wikiNotice}
+        />
+      </div>
     </div>
   );
 }
